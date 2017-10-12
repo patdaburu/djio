@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# To supply a build number (as one might with CI), export the value to the environment like so...
+# export BUILDNUM=100
+
+# Create the package and upload it!
+python setup.py sdist upload -r pypi
