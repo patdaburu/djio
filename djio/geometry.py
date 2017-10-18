@@ -44,25 +44,38 @@ class LateralSides(Enum):
 
 
 class SpatialReference(object):
+    """
+    A spatial reference system (SRS) or coordinate reference system (CRS) is a coordinate-based local, regional or
+    global system used to locate geographical entities. A spatial reference system defines a specific map projection,
+    as well as transformations between different spatial reference systems.
 
-    #_ogr_srs_cache: Dict[int, ogr.osr.SpatialReference] = {}  #: a cache of OGR spatial references that we've created
-    _instances = {}
+    :seealso: https://en.wikipedia.org/wiki/Spatial_reference_system
+    """
+    _instances = {}  #: the instances of spatial reference that have been created
 
     def __init__(self, srid: int):
         """
 
         :param srid: the well-known spatial reference ID
         """
-        self._srid: int = srid  #: the spatial reference well-known ID
-        # Keep a handy reference to OGR spatial reference.
-        self._ogr_srs = self._get_ogr_srs(self._srid)
+        # To coordinate __init__ with __new__, we're using a flag attribute that indicates to this instance that
+        # even if __init__ is being called a second time, there's nothing more to do.
+        if not hasattr(self, '_init'):
+            self._init = True  # Mark this instance as "initialized".
+            self._srid: int = srid  #: the spatial reference well-known ID
+            # Keep a handy reference to OGR spatial reference.
+            self._ogr_srs = self._get_ogr_sr(self._srid)
 
     def __new__(cls, srid: int):
+        # If this spatial reference has already been created...
         if srid in SpatialReference._instances:
+            # ...use the current instance.
             return SpatialReference._instances[srid]
-        else:
+        else:  # Otherwise, create a new instance.
             new_sr = super(SpatialReference, cls).__new__(cls)
+            # Save it in the cache.
             SpatialReference._instances[srid] = new_sr
+            # That's that.
             return new_sr
 
     @property
@@ -75,7 +88,7 @@ class SpatialReference(object):
         return self._srid
 
     @staticmethod
-    def _get_ogr_srs(srid: int) -> ogr.osr.SpatialReference:
+    def _get_ogr_sr(srid: int) -> ogr.osr.SpatialReference:
         """
         Get an OGR spatial reference from its spatial reference ID (srid).
 
@@ -83,12 +96,12 @@ class SpatialReference(object):
         :return: the OGR spatial reference.
         """
         # Create the OGR spatial reference.
-        ogr_srs = ogr.osr.SpatialReference()
+        ogr_sr = ogr.osr.SpatialReference()
         # Let's assume the SRID is defined by the EPSG.
         # (Note: If we need to support others, this is the place to do it.)
-        ogr_srs.ImportFromEPSG(srid)
+        ogr_sr.ImportFromEPSG(srid)
         # That's that.
-        return ogr_srs
+        return ogr_sr
 
 
 class GeometryType(Enum):
