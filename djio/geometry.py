@@ -122,6 +122,13 @@ class GeometryType(Enum):
     POLYLINE: int = 2  #: a polyline geometry
     POLYGON: int = 3   #: a polygon geometry
 
+_shapely_geom_type_map: Dict[str, GeometryType] = {
+    'point': GeometryType.POINT,
+    'linestring': GeometryType.POLYLINE,
+    'linearring': GeometryType.POLYLINE,
+    'polygon' : GeometryType.POLYGON
+}  #: maps Shapely geometry types to djio geometry types
+
 
 _geometry_factory_functions = {}  #: a hash of GeometryTypes to functions that can create that type from a base geometry
 
@@ -135,6 +142,11 @@ class Geometry(object):
     def __init__(self,
                  shapely: BaseGeometry,
                  spatial_reference: SpatialReference or int=None):
+        """
+
+        :param shapely: a Shapely geometry
+        :param spatial_reference: the geometry's spatial reference
+        """
         # Keep that reference to the Shapely geometry.
         self._shapely: BaseGeometry = shapely
         # Let's figure out what the spatial reference is.  (It might be an instance of SpatialReference, or it might
@@ -146,8 +158,10 @@ class Geometry(object):
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
                      srid: int):
-        # Return the specific type based on the type of the base geometry.
-        pass
+        # Get Shapely's version of the geometry type.  (Note that the keys in the dictionary are all lower-cased.)
+        geometry_type: GeometryType = _shapely_geom_type_map[shapely.geom_type.lower()]
+        # With this information, we can use the registered function to create the djio geometry.
+        return _geometry_factory_functions[geometry_type](shapely, srid)
 
     @staticmethod
     def from_ogr(ogr_geom: ogr.Geometry):
@@ -190,10 +204,43 @@ def _register_geometry_factory(geometry_type: GeometryType, factory_function: Ca
 
 
 class Point(Geometry):
+    """
+    In modern mathematics, a point refers usually to an element of some set called a space.  More specifically, in
+    Euclidean geometry, a point is a primitive notion upon which the geometry is built, meaning that a point cannot be
+    defined in terms of previously defined objects. That is, a point is defined only by some properties, called axioms,
+    that it must satisfy. In particular, the geometric points do not have any length, area, volume or any other
+    dimensional attribute. A common interpretation is that the concept of a point is meant to capture the notion of a
+    unique location in Euclidean space.
+    """
     def __init__(self,
                  shapely: ShapelyPoint,
                  spatial_reference: SpatialReference or int = None):
+        """
+
+        :param shapely: a Shapely geometry
+        :param spatial_reference: the geometry's spatial reference
+        """
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+
+    @property
+    def x(self) -> float:
+        """
+        Get the X coordinate.
+
+        :return: the X coordinate
+        """
+        # noinspection PyUnresolvedReferences
+        return self._shapely.x
+
+    @property
+    def y(self) -> float:
+        """
+        Get the Y coordinate.
+
+        :return: the Y coordinate
+        """
+        # noinspection PyUnresolvedReferences
+        return self._shapely.y
 
     # TODO: Start adding Point-specific methods and properties.
 
@@ -202,6 +249,13 @@ _register_geometry_factory(GeometryType.POINT, Point)
 
 
 class Polyline(Geometry):
+    """
+    In geometry, a polygonal chain is a connected series of line segments. More formally, a polygonal chain P is a curve
+    specified by a sequence of points (A1 , A2, ... , An ) called its vertices. The curve itself consists of the line
+    segments connecting the consecutive vertices. A polygonal chain may also be called a polygonal curve, polygonal
+    path,  polyline,  piecewise linear curve, broken line or, in geographic information systems (that's us), a
+    linestring or linear ring.
+    """
     def __init__(self,
                  shapely: LineString or LinearRing,
                  spatial_reference: SpatialReference or int = None):
@@ -214,15 +268,26 @@ _register_geometry_factory(GeometryType.POLYLINE, Polyline)
 
 
 class Polygon(Geometry):
+    """
+    In elementary geometry, a polygon (/ˈpɒlɪɡɒn/) is a plane figure that is bounded by a finite chain of straight line
+    segments closing in a loop to form a closed polygonal chain or circuit. These segments are called its edges or
+    sides, and the points where two edges meet are the polygon's vertices (singular: vertex) or corners. The interior of
+    the polygon is sometimes called its body.
+    """
     def __init__(self,
                  shapely: ShapelyPolygon,
                  spatial_reference: SpatialReference or int = None):
+        """
+
+        :param shapely: a Shapely geometry
+        :param spatial_reference: the geometry's spatial reference
+        """
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
 
     # TODO: Start adding Polygon-specific methods and properties.
 
 # Register the geometry factory function (which is just the constructor).
-_register_geometry_factory(GeometryType.POLYLINE, Polygon)
+_register_geometry_factory(GeometryType.POLYGON, Polygon)
 
 
 
