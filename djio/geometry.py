@@ -15,11 +15,12 @@ from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
 from geoalchemy2.shape import from_shape as from_shapely
 from shapely.geometry.base import BaseGeometry
-from shapely.geometry import Point
+from shapely.geometry import Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
+from typing import Dict, Callable
 
 
 class GeometryException(Exception):
@@ -122,6 +123,9 @@ class GeometryType(Enum):
     POLYGON: int = 3   #: a polygon geometry
 
 
+_geometry_factory_functions = {}  #: a hash of GeometryTypes to functions that can create that type from a base geometry
+
+
 class Geometry(object):
     """
     This is the common base class for all of the geometry types.
@@ -173,5 +177,55 @@ class Geometry(object):
                          srid: int):
         shapely = to_shapely(spatial_element)
         return Geometry.from_shapely(shapely=shapely, srid=srid)
+
+
+def _register_geometry_factory(geometry_type: GeometryType, factory_function: Callable[[BaseGeometry, int], Geometry]):
+    """
+    Register a geometry factory function.
+
+    :param geometry_type: the enumerated geometry type
+    :param factory_function: the factory function
+    """
+    _geometry_factory_functions[geometry_type] = factory_function
+
+
+class Point(Geometry):
+    def __init__(self,
+                 shapely: ShapelyPoint,
+                 spatial_reference: SpatialReference or int = None):
+        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+
+    # TODO: Start adding Point-specific methods and properties.
+
+# Register the geometry factory function (which is just the constructor).
+_register_geometry_factory(GeometryType.POINT, Point)
+
+
+class Polyline(Geometry):
+    def __init__(self,
+                 shapely: LineString or LinearRing,
+                 spatial_reference: SpatialReference or int = None):
+        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+
+    # TODO: Start adding Polyline-specific methods and properties.
+
+# Register the geometry factory function (which is just the constructor).
+_register_geometry_factory(GeometryType.POLYLINE, Polyline)
+
+
+class Polygon(Geometry):
+    def __init__(self,
+                 shapely: ShapelyPolygon,
+                 spatial_reference: SpatialReference or int = None):
+        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+
+    # TODO: Start adding Polygon-specific methods and properties.
+
+# Register the geometry factory function (which is just the constructor).
+_register_geometry_factory(GeometryType.POLYLINE, Polygon)
+
+
+
+
 
 
