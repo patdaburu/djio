@@ -155,6 +155,15 @@ class Geometry(object):
                                                      if isinstance(spatial_reference, SpatialReference)
                                                      else SpatialReference(srid=spatial_reference))
 
+    @property
+    def shapely(self) -> BaseGeometry:
+        """
+        Get the Shapely geometry underlying this geometry object.
+
+        :return: the Shapely geometry
+        """
+        return self._shapely
+
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
                      srid: int):
@@ -269,10 +278,10 @@ _register_geometry_factory(GeometryType.POLYLINE, Polyline)
 
 class Polygon(Geometry):
     """
-    In elementary geometry, a polygon (/ˈpɒlɪɡɒn/) is a plane figure that is bounded by a finite chain of straight line
-    segments closing in a loop to form a closed polygonal chain or circuit. These segments are called its edges or
-    sides, and the points where two edges meet are the polygon's vertices (singular: vertex) or corners. The interior of
-    the polygon is sometimes called its body.
+    In elementary geometry, a polygon is a plane figure that is bounded by a finite chain of straight line segments
+    closing in a loop to form a closed polygonal chain or circuit. These segments are called its edges or sides, and the
+    points where two edges meet are the polygon's vertices (singular: vertex) or corners. The interior of the polygon is
+    sometimes called its body.
     """
     def __init__(self,
                  shapely: ShapelyPolygon,
