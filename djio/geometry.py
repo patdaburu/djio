@@ -11,7 +11,15 @@ Working with geometries?  Need help?  Here it is!
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from osgeo import ogr
-from geoalchemy2.elements import WKBElement
+from geoalchemy2.types import WKBElement, WKTElement
+from geoalchemy2.shape import to_shape as to_shapely
+from geoalchemy2.shape import from_shape as from_shapely
+from shapely.geometry.base import BaseGeometry
+from shapely.geometry import Point
+from shapely.wkb import dumps as dumps_wkb
+from shapely.wkb import loads as loads_wkb
+from shapely.wkt import dumps as dumps_wkt
+from shapely.wkt import loads as loads_wkt
 
 
 class GeometryException(Exception):
@@ -121,9 +129,10 @@ class Geometry(object):
     __metaclass__ = ABCMeta
 
     def __init__(self,
-                 ogr_geometry: ogr.Geometry,
+                 shapely: BaseGeometry,
                  spatial_reference: SpatialReference or int=None):
-        self._ogr_geometry: ogr.Geometry = ogr_geometry
+        # Keep that reference to the Shapely geometry.
+        self._shapely: BaseGeometry = shapely
         # Let's figure out what the spatial reference is.  (It might be an instance of SpatialReference, or it might
         # be the SRID.)
         self._spatial_reference: SpatialReference = (spatial_reference
@@ -131,23 +140,38 @@ class Geometry(object):
                                                      else SpatialReference(srid=spatial_reference))
 
     @staticmethod
-    def from_ogr_geometry(ogr_geom: ogr.Geometry):
+    def from_shapely(shapely: BaseGeometry,
+                     srid: int):
+        # Return the specific type based on the type of the base geometry.
         pass
 
     @staticmethod
-    def from_wkt(wkt: str):
+    def from_ogr(ogr_geom: ogr.Geometry):
         pass
 
     @staticmethod
-    def from_wkb(wkb: object):
+    def from_ewkt(ewkt: str):
+        pass;
+
+    @staticmethod
+    def from_wkt(wkt: str, srid: int):
+        shapely = loads_wkt(wkt)
+        return Geometry.from_shapely(shapely)
+
+    @staticmethod
+    def from_wkb(wkb: str):
+        # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
+        shapely = loads_wkb(wkb)
+        return Geometry.from_shapely(shapely)
+
+    @staticmethod
+    def from_gml(gml: str):
         pass
 
     @staticmethod
-    def from_wkbelement(wkbelement: WKBElement):
-        # 1. get the WKB.
-        # 2. get the SRID.
-        # 3. create the OGR geometry
-        # 4. call from_ogr_geometry()
-        pass
+    def from_geoalchemy2(spatial_element: WKBElement or WKTElement,
+                         srid: int):
+        shapely = to_shapely(spatial_element)
+        return Geometry.from_shapely(shapely=shapely, srid=srid)
 
 
