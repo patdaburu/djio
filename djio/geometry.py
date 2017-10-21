@@ -14,6 +14,7 @@ from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
 from geoalchemy2.shape import from_shape as from_shapely
+import re
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.wkb import dumps as dumps_wkb
@@ -139,6 +140,12 @@ class Geometry(object):
     """
     __metaclass__ = ABCMeta
 
+    # This is a regex that matches an EWKT string, capturing the spatial reference ID (SRID) in a group called 'srid'
+    # and the rest of the well-known text (WKT) in a group called 'wkt'.
+    _ewkt_re = re.compile(
+        r"srid=(?P<srid>\d+)\s*;\s*(?P<wkt>.*)",
+        flags=re.IGNORECASE)  #: a regex that matches extended WKT (EWKT)
+
     def __init__(self,
                  shapely: BaseGeometry,
                  spatial_reference: SpatialReference or int=None):
@@ -173,31 +180,47 @@ class Geometry(object):
         return _geometry_factory_functions[geometry_type](shapely, srid)
 
     @staticmethod
-    def from_ogr(ogr_geom: ogr.Geometry):
+    def from_ogr(ogr_geom: ogr.Geometry) -> 'Geometry':
         pass
 
     @staticmethod
-    def from_ewkt(ewkt: str):
-        pass;
+    def from_ewkt(ewkt: str) -> 'Geometry':
+        """
+        Create a geometry from EWKT, a PostGIS-specifc format that includes the spatial reference system identifier an
+        up to four (4) ordinate values (XYZM).  For example: SRID=4326;POINT(-44.3 60.1) to locate a longitude/latitude
+        coordinate using the WGS 84 reference coordinate system.
+
+        :param ewkt: the extended well-known text (EWKT)
+        :return: the geometry
+        """
+        # Let's see if we can match the format so we can separate the SRID from the rest of the WKT.
+        ewkt_match = Geometry._ewkt_re.search(ewkt)
+        if not ewkt_match:
+            raise GeometryException('The EWKT is not properly formatted.')  # TODO: Add more information?
+        # We have a match!  Let's go get the pieces.
+        srid = int(ewkt_match.group('srid'))  # Grab the SRID.
+        wkt = ewkt_match.group('wkt')  # Get the WKT.
+        # Now we have enough information to create a Shapely geometry plus the SRID, so...
+        return Geometry.from_wkt(wkt=wkt, srid=srid)
 
     @staticmethod
-    def from_wkt(wkt: str, srid: int):
+    def from_wkt(wkt: str, srid: int) -> 'Geometry':
         shapely = loads_wkt(wkt)
         return Geometry.from_shapely(shapely)
 
     @staticmethod
-    def from_wkb(wkb: str):
+    def from_wkb(wkb: str) -> 'Geometry':
         # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
         shapely = loads_wkb(wkb)
         return Geometry.from_shapely(shapely)
 
     @staticmethod
-    def from_gml(gml: str):
-        pass
+    def from_gml(gml: str) -> 'Geometry':
+        raise NotImplementedError('Coming soon...')
 
     @staticmethod
     def from_geoalchemy2(spatial_element: WKBElement or WKTElement,
-                         srid: int):
+                         srid: int) -> 'Geometry':
         shapely = to_shapely(spatial_element)
         return Geometry.from_shapely(shapely=shapely, srid=srid)
 
