@@ -189,8 +189,18 @@ class Geometry(object):
         return _geometry_factory_functions[geometry_type](shapely, srid)
 
     @staticmethod
-    def from_ogr(ogr_geom: ogr.Geometry) -> 'Geometry':
-        pass
+    def from_ogr(ogr_geom: ogr.Geometry, srid: int=None) -> 'Geometry':
+        # Grab the SRID from the arguments.
+        _srid = srid
+        # If the caller didn't provide one...
+        if _srid is None:
+            # ...dig it out of the geometry's spatial reference.
+            ogr_srs: ogr.osr.SpatialReference = ogr_geom.GetSpatialReference()
+            # Now, if the geometry didn't bring it's own spatial reference, we have a problem
+            if ogr_srs is None:
+                raise GeometryException('The geometry has no spatial reference, and no SRID was supplied.')
+            _srid = int(ogr_srs.GetAttrValue('AUTHORITY', 1))
+        return Geometry.from_wkb(wkb=ogr_geom.ExportToWkb(), srid=_srid)
 
     @staticmethod
     def from_ewkt(ewkt: str) -> 'Geometry':
