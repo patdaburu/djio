@@ -8,7 +8,7 @@
 Working with geometries?  Need help?  Here it is!
 """
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from enum import Enum
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
@@ -21,7 +21,7 @@ from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Dict, Callable
+from typing import Dict, Callable, Type
 
 
 class GeometryException(Exception):
@@ -131,7 +131,9 @@ _shapely_geom_type_map: Dict[str, GeometryType] = {
 }  #: maps Shapely geometry types to djio geometry types
 
 
-_geometry_factory_functions = {}  #: a hash of GeometryTypes to functions that can create that type from a base geometry
+_geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, int], 'Geometry']] = {
+
+}  #: a hash of GeometryTypes to functions that can create that type from a base geometry
 
 
 class Geometry(object):
@@ -163,6 +165,13 @@ class Geometry(object):
                                                      else SpatialReference(srid=spatial_reference))
 
     @property
+    def geometry_type(self) -> GeometryType:
+        try:
+            return _shapely_geom_type_map[self._shapely.geom_type.lower()]
+        except KeyError:
+            return GeometryType.UNKNOWN
+
+    @property
     def shapely(self) -> BaseGeometry:
         """
         Get the Shapely geometry underlying this geometry object.
@@ -173,7 +182,7 @@ class Geometry(object):
 
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
-                     srid: int):
+                     srid: int) -> 'Geometry':
         # Get Shapely's version of the geometry type.  (Note that the keys in the dictionary are all lower-cased.)
         geometry_type: GeometryType = _shapely_geom_type_map[shapely.geom_type.lower()]
         # With this information, we can use the registered function to create the djio geometry.
@@ -206,13 +215,13 @@ class Geometry(object):
     @staticmethod
     def from_wkt(wkt: str, srid: int) -> 'Geometry':
         shapely = loads_wkt(wkt)
-        return Geometry.from_shapely(shapely)
+        return Geometry.from_shapely(shapely=shapely, srid=srid)
 
     @staticmethod
-    def from_wkb(wkb: str) -> 'Geometry':
+    def from_wkb(wkb: str, srid: int) -> 'Geometry':
         # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
         shapely = loads_wkb(wkb)
-        return Geometry.from_shapely(shapely)
+        return Geometry.from_shapely(shapely=shapely, srid=srid)
 
     @staticmethod
     def from_gml(gml: str) -> 'Geometry':
@@ -255,6 +264,15 @@ class Point(Geometry):
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
 
     @property
+    def geometry_type(self) -> GeometryType:
+        """
+        Get the geometry type.
+
+        :return:  :py:attr:`GeometryType.POINT`
+        """
+        return GeometryType.POINT
+
+    @property
     def x(self) -> float:
         """
         Get the X coordinate.
@@ -293,6 +311,15 @@ class Polyline(Geometry):
                  spatial_reference: SpatialReference or int = None):
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
 
+    @property
+    def geometry_type(self) -> GeometryType:
+        """
+        Get the geometry type.
+
+        :return:  :py:attr:`GeometryType.POLYLINE`
+        """
+        return GeometryType.POLYLINE
+
     # TODO: Start adding Polyline-specific methods and properties.
 
 # Register the geometry factory function (which is just the constructor).
@@ -315,6 +342,15 @@ class Polygon(Geometry):
         :param spatial_reference: the geometry's spatial reference
         """
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+
+    @property
+    def geometry_type(self) -> GeometryType:
+        """
+        Get the geometry type.
+
+        :return:  :py:attr:`GeometryType.POLYGON`
+        """
+        return GeometryType.POLYGON
 
     # TODO: Start adding Polygon-specific methods and properties.
 
