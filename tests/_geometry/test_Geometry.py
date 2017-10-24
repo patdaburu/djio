@@ -39,5 +39,9 @@ class TestGeometrySuite(unittest.TestCase):
         self.assertEqual(200.2, q.x)
         self.assertEqual(100.1, q.y)
 
+    def test_toGml_verify(self):  # TODO: Add assertions
+        p = Point.from_coordinates(x=100.1, y=200.2, srid=3857)
+        print(p.to_gml(version=3))
+
 
 

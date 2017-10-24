@@ -97,6 +97,10 @@ class SpatialReference(object):
         """
         return self._srid
 
+    @property
+    def ogr_sr(self) -> ogr.osr.SpatialReference:
+        return self._ogr_srs
+
     @staticmethod
     def _get_ogr_sr(srid: int) -> ogr.osr.SpatialReference:
         """
@@ -163,6 +167,7 @@ class Geometry(object):
         self._spatial_reference: SpatialReference = (spatial_reference
                                                      if isinstance(spatial_reference, SpatialReference)
                                                      else SpatialReference(srid=spatial_reference))
+        self._cached_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -197,6 +202,45 @@ class Geometry(object):
         :return: a new :py:class:`Geometry` with reversed ordinals.
         """
         raise NotImplementedError('The subclass must implement this method.')
+
+    @property
+    def to_ogr(self) -> ogr.Geometry:
+        """
+        Get the OGR geometry equivalent of this geometry.
+
+        :return: the OGR geometry equivalent
+        """
+        # Create a new OGR geometry.  (We don't want one from the cache because we don't know what the caller will
+        # do to it once we send it back.)
+        return self._get_ogr_geometry(from_cache=False)
+
+    def _get_ogr_geometry(self, from_cache: bool = True) -> ogr.Geometry:
+        """
+        Subclasses can use this method to get the OGR geometry equivalent.
+
+        :param from_cache: Return the cached OGR geometry (if it's available).
+        :return: the OGR geometry equivalent
+        """
+        # If we have already created the OGR geometry once, just return it again.
+        if from_cache and self._cached_ogr_geometry is not None:
+            return self._cached_ogr_geometry
+        # Perform the WKB->OGR Geometry conversion.
+        ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
+        # Assign the spatial reference.
+        ogr_geometry.AssignSpatialReference(self._spatial_reference.ogr_sr)
+        # That's that!
+        return ogr_geometry
+
+    def to_gml(self, version: int or str=3) -> str:
+        """
+        Export the geometry to GML.
+
+        :return: the GML representation of the geometry
+        """
+        _ogr = self._get_ogr_geometry(from_cache=True)
+        return _ogr.ExportToGML(options=[
+            'FORMAT=GML{version}'.format(version=version)  # ExportToGML(options=['FORMAT=GML3'])
+        ])
 
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
