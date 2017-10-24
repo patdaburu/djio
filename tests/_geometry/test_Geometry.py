@@ -31,4 +31,13 @@ class TestGeometrySuite(unittest.TestCase):
         self.assertEqual(-94.1, point.x)
         self.assertEqual(46.5, point.y)
 
+    def test_flipCoordinates_verify(self):
+        p = Point.from_coordinates(x=100.1, y=200.2, srid=3857)
+        self.assertEqual(100.1, p.x)
+        self.assertEqual(200.2, p.y)
+        q = p.flip_coordinates()
+        self.assertEqual(200.2, q.x)
+        self.assertEqual(100.1, q.y)
+
+
 

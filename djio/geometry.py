@@ -180,9 +180,37 @@ class Geometry(object):
         """
         return self._shapely
 
+    @property
+    def spatial_reference(self) -> SpatialReference:
+        """
+        Get the geometry's spatial reference.
+
+        :return: the geometry's spatial reference
+        """
+        return self._spatial_reference
+
+    @abstractmethod
+    def flip_coordinates(self) -> 'Geometry':
+        """
+        Create a geometry based on this one, but with the X and Y axis reversed.
+
+        :return: a new :py:class:`Geometry` with reversed ordinals.
+        """
+        raise NotImplementedError('The subclass must implement this method.')
+
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
                      srid: int) -> 'Geometry':
+        """
+        Create a new geometry based on a Shapely :py:class:`BaseGeometry`.
+
+        :param shapely: the Shapely base geometry
+        :param srid: the spatial reference ID
+        :return: the new geometry
+        :seealso:  :py:class:`Point`
+        :seealso: :py:class:`Polyline`
+        :seealso: :py:class:`Polygon`
+        """
         # Get Shapely's version of the geometry type.  (Note that the keys in the dictionary are all lower-cased.)
         geometry_type: GeometryType = _shapely_geom_type_map[shapely.geom_type.lower()]
         # With this information, we can use the registered function to create the djio geometry.
@@ -271,6 +299,8 @@ class Point(Geometry):
         :param shapely: a Shapely geometry
         :param spatial_reference: the geometry's spatial reference
         """
+        # Redefine the shapely geometry (mostly to help out the IDEs).
+        self._shapely: ShapelyPoint = None
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
 
     @property
@@ -301,6 +331,55 @@ class Point(Geometry):
         """
         # noinspection PyUnresolvedReferences
         return self._shapely.y
+
+    def flip_coordinates(self) -> 'Point':
+        """
+        Create a point based on this one, but with the X and Y axis reversed.
+
+        :return: a new :py:class:`Geometry` with reversed ordinals.
+        """
+        shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
+        return Point(shapely=shapely, spatial_reference=self.spatial_reference)
+
+    @staticmethod
+    def from_lat_lon(latitude: float, longitude: float) -> 'Point':
+        """
+        Create a geometry from a set of latitude, longitude coordinates.
+
+        :param latitude: the latitude
+        :param longitude: the longitude
+        :return: :py:class:`Point`
+        """
+        shapely = ShapelyPoint(longitude, latitude)
+        return Point(shapely=shapely, spatial_reference=4326)
+
+    @staticmethod
+    def from_coordinates(x: float, y: float, srid: int):
+        """
+        Create a point from its coordinates.
+
+        :param x: the X coordinate
+        :param y: the Y coordinate
+        :param srid: the spatial reference ID
+        :return: the new :py:class:`Point`
+        """
+        shapely = ShapelyPoint(x, y)
+        return Point(shapely=shapely, spatial_reference=srid)
+
+    @staticmethod
+    def from_shapely(shapely: ShapelyPoint,
+                     srid: int) -> 'Point':
+        """
+        Create a new point based on a Shapely point.
+
+        :param shapely: the Shapely point
+        :param srid: the spatial reference ID
+        :return: the new geometry
+        :seealso:  :py:func:`Geometry.from_shapely`
+        """
+        return Point(shapely=shapely, spatial_reference=srid)
+
+
 
     # TODO: Start adding Point-specific methods and properties.
 
