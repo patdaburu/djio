@@ -39,9 +39,16 @@ class TestGeometrySuite(unittest.TestCase):
         self.assertEqual(200.2, q.x)
         self.assertEqual(100.1, q.y)
 
-    def test_toGml_verify(self):  # TODO: Add assertions
-        p = Point.from_coordinates(x=100.1, y=200.2, srid=3857)
-        print(p.to_gml(version=3))
+    def test_pointToGml_verify(self):
+        p = Point.from_coordinates(x=91.5, y=-46.1, srid=4326)
+        self.assertEqual(
+            """<gml:Point srsName="urn:ogc:def:crs:EPSG::4326"><gml:pos>-46.1 91.5</gml:pos></gml:Point>""",
+            p.to_gml(version=3)
+        )
+        self.assertEqual(
+            """<gml:Point srsName="EPSG:4326"><gml:coordinates>91.5,-46.1</gml:coordinates></gml:Point>""",
+            p.to_gml(version=2)
+        )
 
 
 
