@@ -12,6 +12,7 @@ import unittest
 from djio.geometry import Geometry, GeometryType, Point
 from osgeo import ogr
 
+
 class TestGeometrySuite(unittest.TestCase):
 
     _wgs84: ogr.osr.SpatialReference = ogr.osr.SpatialReference()
@@ -42,13 +43,20 @@ class TestGeometrySuite(unittest.TestCase):
     def test_pointToGml_verify(self):
         p = Point.from_coordinates(x=91.5, y=-46.1, srid=4326)
         self.assertEqual(
-            """<gml:Point srsName="urn:ogc:def:crs:EPSG::4326"><gml:pos>-46.1 91.5</gml:pos></gml:Point>""",
-            p.to_gml(version=3)
-        )
-        self.assertEqual(
             """<gml:Point srsName="EPSG:4326"><gml:coordinates>91.5,-46.1</gml:coordinates></gml:Point>""",
             p.to_gml(version=2)
         )
+        self.assertEqual(
+            """<gml:Point srsName="urn:ogc:def:crs:EPSG::4326"><gml:pos>-46.1 91.5</gml:pos></gml:Point>""",
+            p.to_gml(version=3)
+        )
+
+    def test_transform_verifyTargetSrid(self):
+        p = Point.from_coordinates(x=91.5, y=-46.1, srid=4326)
+        q = p.transform(spatial_reference=3857)
+        self.assertEqual(3857, q.spatial_reference.srid)
+
+
 
 
 

@@ -102,6 +102,19 @@ class SpatialReference(object):
         return self._ogr_srs
 
     @staticmethod
+    def from_srid(srid: int) -> 'SpatialReference':
+        # If this spatial reference has already been created...
+        if srid in SpatialReference._instances:
+            # ...use the current instance.
+            return SpatialReference._instances[srid]
+        else:  # Otherwise, create a new instance.
+            new_sr = SpatialReference(srid=srid)
+            # Save it in the cache.
+            SpatialReference._instances[srid] = new_sr
+            # That's that.
+            return new_sr
+
+    @staticmethod
     def _get_ogr_sr(srid: int) -> ogr.osr.SpatialReference:
         """
         Get an OGR spatial reference from its spatial reference ID (srid).
@@ -166,7 +179,7 @@ class Geometry(object):
         # be the SRID.)
         self._spatial_reference: SpatialReference = (spatial_reference
                                                      if isinstance(spatial_reference, SpatialReference)
-                                                     else SpatialReference(srid=spatial_reference))
+                                                     else SpatialReference.from_srid(srid=spatial_reference))
         self._cached_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
 
     @property
@@ -193,15 +206,6 @@ class Geometry(object):
         :return: the geometry's spatial reference
         """
         return self._spatial_reference
-
-    @abstractmethod
-    def flip_coordinates(self) -> 'Geometry':
-        """
-        Create a geometry based on this one, but with the X and Y axis reversed.
-
-        :return: a new :py:class:`Geometry` with reversed ordinals.
-        """
-        raise NotImplementedError('The subclass must implement this method.')
 
     @property
     def to_ogr(self) -> ogr.Geometry:
@@ -231,6 +235,25 @@ class Geometry(object):
         # That's that!
         return ogr_geometry
 
+    def transform(self, spatial_reference: SpatialReference or int) -> 'Geometry':
+        """
+        Create a new geometry based on this geometry but in another spatial reference.
+
+        :param spatial_reference: the target spatial reference
+        :return: the new transformed geometry
+        """
+        # We need the OGR geometry.
+        ogr_geometry = self._get_ogr_geometry(from_cache=True)
+        # Now we need the target spatial reference.
+        sr = (
+            spatial_reference if isinstance(spatial_reference, SpatialReference)
+            else SpatialReference.from_srid(srid=spatial_reference)
+        )
+        # Transform the OGR geometry to the new coordinate system...
+        ogr_geometry.TransformTo(sr.ogr_sr)
+        # ...and build the new djio geometry from it.
+        return Geometry.from_ogr(ogr_geom=ogr_geometry)
+
     def to_gml(self, version: int or str=3) -> str:
         """
         Export the geometry to GML.
@@ -241,6 +264,15 @@ class Geometry(object):
         return _ogr.ExportToGML(options=[
             'FORMAT=GML{version}'.format(version=version)  # ExportToGML(options=['FORMAT=GML3'])
         ])
+
+    @abstractmethod
+    def flip_coordinates(self) -> 'Geometry':
+        """
+        Create a geometry based on this one, but with the X and Y axis reversed.
+
+        :return: a new :py:class:`Geometry` with reversed ordinals.
+        """
+        raise NotImplementedError('The subclass must implement this method.')
 
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
