@@ -19,7 +19,7 @@ class TestGeometrySuite(unittest.TestCase):
     _wgs84.ImportFromEPSG(4326)
 
     def test_pointFromWkt_verify(self):
-        point: Point = Geometry.from_wkt(wkt='POINT(-94.1 46.5)', srid=4326)
+        point: Point = Geometry.from_wkt(wkt='POINT(-94.1 46.5)', spatial_reference=4326)
         self.assertEqual(GeometryType.POINT, point.geometry_type)
         self.assertEqual(-94.1, point.x)
         self.assertEqual(46.5, point.y)
@@ -27,13 +27,13 @@ class TestGeometrySuite(unittest.TestCase):
     def test_pointFromOgr_verify(self):
         ogr_point = ogr.Geometry(ogr.wkbPoint)
         ogr_point.AddPoint(-94.1, 46.5)
-        point: Point = Geometry.from_ogr(ogr_geom=ogr_point, srid=4326)
+        point: Point = Geometry.from_ogr(ogr_geom=ogr_point, spatial_reference=4326)
         self.assertEqual(GeometryType.POINT, point.geometry_type)
         self.assertEqual(-94.1, point.x)
         self.assertEqual(46.5, point.y)
 
     def test_flipCoordinates_verify(self):
-        p = Point.from_coordinates(x=100.1, y=200.2, srid=3857)
+        p = Point.from_coordinates(x=100.1, y=200.2, spatial_reference=3857)
         self.assertEqual(100.1, p.x)
         self.assertEqual(200.2, p.y)
         q = p.flip_coordinates()
@@ -41,7 +41,7 @@ class TestGeometrySuite(unittest.TestCase):
         self.assertEqual(100.1, q.y)
 
     def test_pointToGml_verify(self):
-        p = Point.from_coordinates(x=91.5, y=-46.1, srid=4326)
+        p = Point.from_coordinates(x=91.5, y=-46.1, spatial_reference=4326)
         self.assertEqual(
             """<gml:Point srsName="EPSG:4326"><gml:coordinates>91.5,-46.1</gml:coordinates></gml:Point>""",
             p.to_gml(version=2)
@@ -52,7 +52,7 @@ class TestGeometrySuite(unittest.TestCase):
         )
 
     def test_transform_verifyTargetSrid(self):
-        p = Point.from_coordinates(x=91.5, y=-46.1, srid=4326)
+        p = Point.from_coordinates(x=91.5, y=-46.1, spatial_reference=4326)
         q = p.transform(spatial_reference=3857)
         self.assertEqual(3857, q.spatial_reference.srid)
 

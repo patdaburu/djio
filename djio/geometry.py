@@ -148,7 +148,7 @@ _shapely_geom_type_map: Dict[str, GeometryType] = {
 }  #: maps Shapely geometry types to djio geometry types
 
 
-_geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, int], 'Geometry']] = {
+_geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, SpatialReference], 'Geometry']] = {
 
 }  #: a hash of GeometryTypes to functions that can create that type from a base geometry
 
@@ -276,12 +276,12 @@ class Geometry(object):
 
     @staticmethod
     def from_shapely(shapely: BaseGeometry,
-                     srid: int) -> 'Geometry':
+                     spatial_reference:  SpatialReference or int) -> 'Geometry':
         """
         Create a new geometry based on a Shapely :py:class:`BaseGeometry`.
 
         :param shapely: the Shapely base geometry
-        :param srid: the spatial reference ID
+        :param spatial_reference: the spatial reference (or spatial reference ID)
         :return: the new geometry
         :seealso:  :py:class:`Point`
         :seealso: :py:class:`Polyline`
@@ -290,26 +290,26 @@ class Geometry(object):
         # Get Shapely's version of the geometry type.  (Note that the keys in the dictionary are all lower-cased.)
         geometry_type: GeometryType = _shapely_geom_type_map[shapely.geom_type.lower()]
         # With this information, we can use the registered function to create the djio geometry.
-        return _geometry_factory_functions[geometry_type](shapely, srid)
+        return _geometry_factory_functions[geometry_type](shapely, spatial_reference)
 
     @staticmethod
-    def from_ogr(ogr_geom: ogr.Geometry, srid: int=None) -> 'Geometry':
-        # Grab the SRID from the arguments.
-        _srid = srid
+    def from_ogr(ogr_geom: ogr.Geometry, spatial_reference: SpatialReference or int=None) -> 'Geometry':
+        # Grab the spatial reference from the arguments.
+        _sr = spatial_reference
         # If the caller didn't provide one...
-        if _srid is None:
+        if _sr is None:
             # ...dig it out of the geometry's spatial reference.
             ogr_srs: ogr.osr.SpatialReference = ogr_geom.GetSpatialReference()
             # Now, if the geometry didn't bring it's own spatial reference, we have a problem
             if ogr_srs is None:
                 raise GeometryException('The geometry has no spatial reference, and no SRID was supplied.')
-            _srid = int(ogr_srs.GetAttrValue('AUTHORITY', 1))
-        return Geometry.from_wkb(wkb=ogr_geom.ExportToWkb(), srid=_srid)
+            _sr = int(ogr_srs.GetAttrValue('AUTHORITY', 1))
+        return Geometry.from_wkb(wkb=ogr_geom.ExportToWkb(), spatial_reference=_sr)
 
     @staticmethod
     def from_ewkt(ewkt: str) -> 'Geometry':
         """
-        Create a geometry from EWKT, a PostGIS-specifc format that includes the spatial reference system identifier an
+        Create a geometry from EWKT, a PostGIS-specific format that includes the spatial reference system identifier an
         up to four (4) ordinate values (XYZM).  For example: SRID=4326;POINT(-44.3 60.1) to locate a longitude/latitude
         coordinate using the WGS 84 reference coordinate system.
 
@@ -324,18 +324,18 @@ class Geometry(object):
         srid = int(ewkt_match.group('srid'))  # Grab the SRID.
         wkt = ewkt_match.group('wkt')  # Get the WKT.
         # Now we have enough information to create a Shapely geometry plus the SRID, so...
-        return Geometry.from_wkt(wkt=wkt, srid=srid)
+        return Geometry.from_wkt(wkt=wkt, spatial_reference=srid)
 
     @staticmethod
-    def from_wkt(wkt: str, srid: int) -> 'Geometry':
+    def from_wkt(wkt: str, spatial_reference: SpatialReference or int) -> 'Geometry':
         shapely = loads_wkt(wkt)
-        return Geometry.from_shapely(shapely=shapely, srid=srid)
+        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
 
     @staticmethod
-    def from_wkb(wkb: str, srid: int) -> 'Geometry':
+    def from_wkb(wkb: str, spatial_reference: SpatialReference or int) -> 'Geometry':
         # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
         shapely = loads_wkb(wkb)
-        return Geometry.from_shapely(shapely=shapely, srid=srid)
+        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_gml(gml: str) -> 'Geometry':
@@ -348,7 +348,8 @@ class Geometry(object):
         return Geometry.from_shapely(shapely=shapely, srid=srid)
 
 
-def _register_geometry_factory(geometry_type: GeometryType, factory_function: Callable[[BaseGeometry, int], Geometry]):
+def _register_geometry_factory(geometry_type: GeometryType,
+                               factory_function: Callable[[BaseGeometry, SpatialReference], Geometry]):
     """
     Register a geometry factory function.
 
@@ -430,7 +431,7 @@ class Point(Geometry):
         return Point(shapely=shapely, spatial_reference=4326)
 
     @staticmethod
-    def from_coordinates(x: float, y: float, srid: int):
+    def from_coordinates(x: float, y: float, spatial_reference: SpatialReference or int):
         """
         Create a point from its coordinates.
 
@@ -440,7 +441,7 @@ class Point(Geometry):
         :return: the new :py:class:`Point`
         """
         shapely = ShapelyPoint(x, y)
-        return Point(shapely=shapely, spatial_reference=srid)
+        return Point(shapely=shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_shapely(shapely: ShapelyPoint,
