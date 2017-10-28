@@ -8,7 +8,9 @@
 Working with geometries?  Need help?  Here it is!
 """
 
+import math
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
+from collections import namedtuple
 from enum import Enum
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
@@ -21,7 +23,7 @@ from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Dict, Callable, Type
+from typing import Dict, Callable, Optional, Type
 
 
 class GeometryException(Exception):
@@ -43,6 +45,10 @@ class GeometryException(Exception):
         Get the inner exception that caused this exception.
         """
         return self._inner
+
+PointTuple = namedtuple('PointTuple', ['x', 'y', 'z', 'srid'])  #: a lightweight tuple that represents a point
+
+LatLonTuple = namedtuple('LatLonTuple', ['latitude', 'longitude'])  #: a lightweight tuple that represents a location
 
 
 class LateralSides(Enum):
@@ -130,6 +136,16 @@ class SpatialReference(object):
         # That's that.
         return ogr_sr
 
+    @staticmethod
+    def get_utm_from_longitude(longitude: float) -> 'SpatialReference':
+        zone = math.ceil(longitude + 180)/6
+        return SpatialReference.from_srid(zone=zone)
+
+    @staticmethod
+    def get_utm_for_zone(zone: int) -> 'SpatialReference':
+        utm_srid = int('269{zone}'.format(zone=zone))
+        return SpatialReference.from_srid(srid=utm_srid)
+
 
 class GeometryType(Enum):
     """
@@ -180,7 +196,8 @@ class Geometry(object):
         self._spatial_reference: SpatialReference = (spatial_reference
                                                      if isinstance(spatial_reference, SpatialReference)
                                                      else SpatialReference.from_srid(srid=spatial_reference))
-        self._cached_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
+        self._lazy_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
+        self._cached_transforms: Dict[int, Geometry] = {}  #: a cache of transformed geometries
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -226,8 +243,8 @@ class Geometry(object):
         :return: the OGR geometry equivalent
         """
         # If we have already created the OGR geometry once, just return it again.
-        if from_cache and self._cached_ogr_geometry is not None:
-            return self._cached_ogr_geometry
+        if from_cache and self._lazy_ogr_geometry is not None:
+            return self._lazy_ogr_geometry
         # Perform the WKB->OGR Geometry conversion.
         ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
         # Assign the spatial reference.
@@ -242,27 +259,41 @@ class Geometry(object):
         :param spatial_reference: the target spatial reference
         :return: the new transformed geometry
         """
-        # We need the OGR geometry.
-        ogr_geometry = self._get_ogr_geometry(from_cache=True)
-        # Now we need the target spatial reference.
-        sr = (
+        # Figure out the target spatial reference.
+        sr: SpatialReference = (
             spatial_reference if isinstance(spatial_reference, SpatialReference)
             else SpatialReference.from_srid(srid=spatial_reference)
         )
-        # Transform the OGR geometry to the new coordinate system...
-        ogr_geometry.TransformTo(sr.ogr_sr)
-        # ...and build the new djio geometry from it.
-        return Geometry.from_ogr(ogr_geom=ogr_geometry)
+        # If this geometry is already in the target spatial reference...
+        if self.spatial_reference.srid == sr.srid:
+            # ...no transformation is necessary.
+            return self
+        # If we've already transformed for this spatial reference once...
+        if sr.srid in self._cached_transforms:
+            # ...just return the previous product.
+            return self._cached_transforms[sr.srid]
+        else:
+            # We need the OGR geometry.
+            ogr_geometry = self._get_ogr_geometry(from_cache=True)
+            # Transform the OGR geometry to the new coordinate system...
+            ogr_geometry.TransformTo(sr.ogr_sr)
+            # ...and build the new djio geometry from it.
+            transformed_geometry = Geometry.from_ogr(ogr_geom=ogr_geometry)
+            # Cache the shapely geometry in case somebody comes calling again.
+            self._cached_transforms[sr.srid] = transformed_geometry
+            # Now we can return it.
+            return transformed_geometry
 
     def to_gml(self, version: int or str=3) -> str:
         """
         Export the geometry to GML.
 
+        :param version: the desired GML version
         :return: the GML representation of the geometry
         """
         _ogr = self._get_ogr_geometry(from_cache=True)
         return _ogr.ExportToGML(options=[
-            'FORMAT=GML{version}'.format(version=version)  # ExportToGML(options=['FORMAT=GML3'])
+            'FORMAT=GML{version}'.format(version=version)
         ])
 
     @abstractmethod
@@ -379,6 +410,8 @@ class Point(Geometry):
         # Redefine the shapely geometry (mostly to help out the IDEs).
         self._shapely: ShapelyPoint = None
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+        self._lazy_point_tuple: PointTuple = None  #: a cached tuple representation of this point, created on demand
+        self._lazy_latlon_tuple: LatLonTuple = None  #: a cached latitude/longitude tuple representation, created on demand
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -409,6 +442,15 @@ class Point(Geometry):
         # noinspection PyUnresolvedReferences
         return self._shapely.y
 
+    @property
+    def z(self) -> float or None:
+        """
+        Get the Z coordinate.
+
+        :return: the Z coordinate
+        """
+        return self._shapely.z
+
     def flip_coordinates(self) -> 'Point':
         """
         Create a point based on this one, but with the X and Y axis reversed.
@@ -417,6 +459,59 @@ class Point(Geometry):
         """
         shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
         return Point(shapely=shapely, spatial_reference=self.spatial_reference)
+
+    def to_point_tuple(self) -> PointTuple:
+        """
+        Get a lightweight tuple representation of this point.
+
+        :return: the tuple representation of the point
+        """
+        # If we haven't created and cached the tuple...
+        if self._lazy_point_tuple is None:
+            # ...let's do that now.
+            self._lazy_point_tuple = PointTuple(x=self.x, y=self.y, z=self.z, srid=self.spatial_reference.srid)
+        # Return the cached tuple.
+        return self._lazy_point_tuple
+
+    def to_latlon_tuple(self) -> LatLonTuple:
+        """
+        Get a lightweight latitude/longitude tuple representation of this point.
+
+        :return: the latitude/longitude tuple representation of this point
+        """
+        # If we haven't created and cached the tuple...
+        if self._lazy_latlon_tuple is None:
+            # We can use this point's coordinates directly if it's already in WGS84, otherwise we need to project it
+            # first.
+            p = self if self.spatial_reference.srid == 4326 else self.transform(spatial_reference=4326)
+            self._lazy_latlon_tuple = LatLonTuple(latitude=p.y, longitude=p.x)
+        # Return the cached tuple.
+        return self._lazy_latlon_tuple
+
+    @staticmethod
+    def from_point_tuple(point_tuple: PointTuple) -> 'Point':
+        """
+        Create a point from a point tuple.
+
+        :param point_tuple: the point tuple
+        :return: the new point
+        """
+        p = Point.from_coordinates(x=point_tuple.x, y=point_tuple.y, spatial_reference=point_tuple.srid)
+        # Go ahead and set the cached tuple property (since we have it right here).
+        p._lazy_point_tuple = tuple
+        # That's that.
+        return p
+
+    @staticmethod
+    def from_latlon_tuple(latlon_tuple: LatLonTuple) -> 'Point':
+        """
+        Create a point from a latitude/longitude tuple.
+
+        :param latlon_tuple: the latitude/longitude tuple
+        :return: the new point
+        """
+        pt: PointTuple = PointTuple(x=latlon_tuple.longitude, y=latlon_tuple.latitude, srid=4326)
+        return Point.from_point_tuple(pt)
 
     @staticmethod
     def from_lat_lon(latitude: float, longitude: float) -> 'Point':
@@ -431,16 +526,20 @@ class Point(Geometry):
         return Point(shapely=shapely, spatial_reference=4326)
 
     @staticmethod
-    def from_coordinates(x: float, y: float, spatial_reference: SpatialReference or int):
+    def from_coordinates(x: float,
+                         y: float,
+                         spatial_reference: SpatialReference or int,
+                         z: Optional[float]=None):
         """
         Create a point from its coordinates.
 
         :param x: the X coordinate
         :param y: the Y coordinate
-        :param srid: the spatial reference ID
+        :param spatial_reference: the spatial reference (or spatial reference ID)
+        :param z: the Z coordinate
         :return: the new :py:class:`Point`
         """
-        shapely = ShapelyPoint(x, y)
+        shapely = ShapelyPoint(x, y, z) if z is not None else ShapelyPoint(x,y)
         return Point(shapely=shapely, spatial_reference=spatial_reference)
 
     @staticmethod
