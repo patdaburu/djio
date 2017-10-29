@@ -490,8 +490,8 @@ class Point(Geometry):
         # Redefine the shapely geometry (mostly to help out the IDEs).
         self._shapely: ShapelyPoint = None
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
-        self._lazy_point_tuple: PointTuple = None  #: a cached tuple representation of this point, created on demand
-        self._lazy_latlon_tuple: LatLonTuple = None  #: a cached latitude/longitude tuple representation, created on demand
+        self._lazy_point_tuple: PointTuple = None  #: a cached tuple representation of this point, created lazily
+        self._lazy_latlon_tuple: LatLonTuple = None #: a cached latitude/longitude tuple representation, created on demand
 
     @property
     def geometry_type(self) -> GeometryType:
