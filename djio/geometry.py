@@ -18,8 +18,8 @@ from geoalchemy2.shape import from_shape as from_shapely
 import math
 from measurement.measures import Area, Distance
 import re
+from shapely.geometry import box, Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
-from shapely.geometry import Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
@@ -69,7 +69,7 @@ class SpatialReference(object):
     :seealso: https://en.wikipedia.org/wiki/Spatial_reference_system
     """
     _instances = {}  #: the instances of spatial reference that have been created
-    _metric_linear_unit_names: Set[str] = set(['meter', 'metre'])  #: metric linear distance unit names
+    _metric_linear_unit_names: Set[str] = {'meter', 'metre'}  #: metric linear distance unit names
 
     def __init__(self, srid: int):
         """
@@ -215,8 +215,8 @@ _shapely_geom_type_map: Dict[str, GeometryType] = {
     'point': GeometryType.POINT,
     'linestring': GeometryType.POLYLINE,
     'linearring': GeometryType.POLYLINE,
-    'polygon' : GeometryType.POLYGON
-}  #: maps Shapely geometry types to djio geometry types
+    'polygon': GeometryType.POLYGON
+}  #: a mapping Shapely geometry types strings to Djio geometry types
 
 
 _geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, SpatialReference], 'Geometry']] = {
@@ -252,10 +252,16 @@ class Geometry(object):
                                                      if isinstance(spatial_reference, SpatialReference)
                                                      else SpatialReference.from_srid(srid=spatial_reference))
         self._lazy_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
+        self._lazy_envelope: 'Envelope' = None  #: the geometry's envelope, created lazily
         self._cached_transforms: Dict[int, Geometry] = {}  #: a cache of transformed geometries
 
     @property
     def geometry_type(self) -> GeometryType:
+        """
+        Get this geometry's type.
+
+        :return: the geometry's type
+        """
         try:
             return _shapely_geom_type_map[self._shapely.geom_type.lower()]
         except KeyError:
@@ -269,6 +275,25 @@ class Geometry(object):
         :return: the Shapely geometry
         """
         return self._shapely
+
+    @property
+    def envelope(self) -> 'Envelope':
+        """
+        Get the envelope (bounding box) of the geometry.
+
+        :return: the geometry's envelope
+        """
+        # If we haven't already created the envelope...
+        if self._lazy_envelope is None:
+            # ...do so now.
+            bounds = self.shapely.bounds
+            self._lazy_envelope = Envelope(min_x=bounds[0],
+                                           min_y=bounds[1],
+                                           max_x=bounds[2],
+                                           max_y=bounds[3],
+                                           spatial_reference=self.spatial_reference)
+        # Return the cached envelope.
+        return self._lazy_envelope
 
     @property
     def spatial_reference(self) -> SpatialReference:
@@ -696,6 +721,28 @@ class Polygon(Geometry):
 _register_geometry_factory(GeometryType.POLYGON, Polygon)
 
 
+class Envelope(Polygon):
+    """
+    An envelope represents the minimum bounding rectangle (minimum x and y values, along with maximum x and y values)
+    defined by coordinate pairs of a geometry. All coordinates for the geometry fall within the envelope.
+    """
+    def __init__(self,
+                 min_x: float,
+                 min_y: float,
+                 max_x: float,
+                 max_y: float,
+                 spatial_reference: SpatialReference or int):
+        """
+
+        :param min_x: the minimum X coordinate
+        :param min_y: the minimum Y coordinate
+        :param max_x: the maximum X coordinate
+        :param max_y: the maximum Y coordinate
+        :param spatial_reference: the spatial reference (or spatial reference ID) in which the coordinates are expressed
+        """
+        # Construct a Shapely polygon using the box() function, and let the parent take it from here.
+        super().__init__(shapely=box(minx=min_x, miny=min_y, maxx=max_x, maxy=max_y),
+                         spatial_reference=spatial_reference)
 
 
 
