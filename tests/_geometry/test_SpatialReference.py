@@ -14,6 +14,12 @@ class TestSpatialReferenceSuite(unittest.TestCase):
     def test_new_verifySrid(self):
         sr = SpatialReference(3857)
         self.assertEqual(3857, sr.srid)
+        #print(sr._ogr_srs.GetLinearUnits())
+        #print(sr._ogr_srs.GetLinearUnitsName())
+        #print(sr._ogr_srs.GetUTMZone())
+        ##print("3857 geographic ", sr._ogr_srs.IsGeographic())
+        ##print("3857 projected ", sr._ogr_srs.IsProjected())
+
 
     def test_new_verifySrToInstance(self):
         sr1 = SpatialReference(srid=3857)
@@ -21,3 +27,6 @@ class TestSpatialReferenceSuite(unittest.TestCase):
         self.assertTrue(sr1 == sr2)
         sr3 = SpatialReference(srid=4326)
         self.assertFalse(sr1 == sr3)
+        #print("4326 geographic ", sr3._ogr_srs.IsGeographic())
+        #print("4326 progjected ", sr3._ogr_srs.IsProjected())
+        #print(sr3._ogr_srs.GetLinearUnitsName())

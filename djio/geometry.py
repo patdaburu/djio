@@ -23,7 +23,7 @@ from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Dict, Callable, Optional, Type
+from typing import Dict, Callable, Optional, Set, Type
 
 
 class GeometryException(Exception):
@@ -68,6 +68,7 @@ class SpatialReference(object):
     :seealso: https://en.wikipedia.org/wiki/Spatial_reference_system
     """
     _instances = {}  #: the instances of spatial reference that have been created
+    _metric_linear_unit_names: Set[str] = set(['meter', 'metre'])  #: metric linear distance unit names
 
     def __init__(self, srid: int):
         """
@@ -81,6 +82,7 @@ class SpatialReference(object):
             self._srid: int = srid  #: the spatial reference well-known ID
             # Keep a handy reference to OGR spatial reference.
             self._ogr_srs = self._get_ogr_sr(self._srid)
+            self._is_metric = SpatialReference._ogr_is_metric(self._ogr_srs)
 
     def __new__(cls, srid: int):
         # If this spatial reference has already been created...
@@ -104,8 +106,60 @@ class SpatialReference(object):
         return self._srid
 
     @property
+    def is_metric(self) -> bool:
+        """
+        Is this a projected spatial reference system that measures linear units in single meters?
+
+        :return: `true` if this is a projected spatial reference system that measures linear units in single meters
+        """
+        return self._is_metric
+
+    @property
     def ogr_sr(self) -> ogr.osr.SpatialReference:
+        """
+        Get the OGR spatial reference.
+
+        :return:  the OGR spatial reference
+        """
         return self._ogr_srs
+
+    @property
+    def is_geographic(self) -> bool:
+        """
+        Is this spatial reference geographic?
+
+        :return: `true` if this is a geographic spatial reference, otherwise `false`
+        """
+        return self._ogr_srs.IsGeographic() == 1
+
+    @property
+    def is_projected(self) -> bool:
+        """
+        Is this spatial reference projected?
+
+        :return: `true` if this is a projected spatial reference, otherwise `false`
+        """
+        return self._ogr_srs.IsProjected() == 1
+
+    @staticmethod
+    def _ogr_is_metric(ogr_sr: ogr.osr.SpatialReference) -> bool:
+        # If the coordinate system isn't projected...
+        if ogr_sr.IsProjected() != 1:
+            # ...it's not metric.
+            return False
+        # If the linear unit isn't one...
+        if ogr_sr.GetLinearUnits() != 1.0:
+            # ...it's not metric.
+            return False
+        # Get the linear unit name.
+        linear_units_name: str = ogr_sr.GetLinearUnitsName()
+        # If no linear unit name is supplied...
+        if linear_units_name is None:
+            # ...we can't claim this to be a "metric" spatial reference.
+            return False
+        # If we got this far, our final determination is based on whether or not we see the linear unit name in
+        # set of names that mean "meter".
+        return linear_units_name.lower() in SpatialReference._metric_linear_unit_names
 
     @staticmethod
     def from_srid(srid: int) -> 'SpatialReference':
@@ -138,8 +192,8 @@ class SpatialReference(object):
 
     @staticmethod
     def get_utm_from_longitude(longitude: float) -> 'SpatialReference':
-        zone = math.ceil(longitude + 180)/6
-        return SpatialReference.from_srid(zone=zone)
+        zone = int(math.ceil(longitude + 180)/6)
+        return SpatialReference.get_utm_for_zone(zone=zone)
 
     @staticmethod
     def get_utm_for_zone(zone: int) -> 'SpatialReference':
