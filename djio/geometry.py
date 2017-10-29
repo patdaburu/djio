@@ -8,7 +8,6 @@
 Working with geometries?  Need help?  Here it is!
 """
 
-import math
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
 from enum import Enum
@@ -16,6 +15,8 @@ from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
 from geoalchemy2.shape import from_shape as from_shapely
+import math
+from measurement.measures import Area, Distance
 import re
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
@@ -670,6 +671,24 @@ class Polygon(Geometry):
         :return:  :py:attr:`GeometryType.POLYGON`
         """
         return GeometryType.POLYGON
+
+    def get_area(self, spatial_reference: Optional[SpatialReference or int]=None) -> Area:
+        # TODO: This method is *ripe* for refactoring!
+        sr = spatial_reference
+        if sr is None:
+            sr = SpatialReference.from_srid(3857)  # TODO: We can apply a more sophisticated mechanism here.
+        elif not isinstance(spatial_reference, SpatialReference):
+            sr = SpatialReference.from_srid(srid=spatial_reference)
+        # Do a sanity check:  If the spatial reference isn't projected and measured in meters...
+        if not sr.is_metric:
+            raise GeometryException('The requested spatial reference is not projected, or is not metric.')
+        # At this point, we know we're dealing with a metric projected coordinate system, so...
+        if sr.srid == self.spatial_reference.srid:
+            # ...we can just create the area.
+            return Area(sq_m=self.shapely.area)
+        else:
+            # Otherwise, we need to transform the geometry to the target spatial reference, then get the area.
+            return Area(sq_m=self.transform(spatial_reference).shapely.area)
 
     # TODO: Start adding Polygon-specific methods and properties.
 
