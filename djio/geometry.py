@@ -24,7 +24,7 @@ from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Dict, Callable, Optional, Set, Type
+from typing import Any, Dict, Callable, Optional, Set, Type
 
 
 class GeometryException(Exception):
@@ -251,9 +251,7 @@ class Geometry(object):
         self._spatial_reference: SpatialReference = (spatial_reference
                                                      if isinstance(spatial_reference, SpatialReference)
                                                      else SpatialReference.from_srid(srid=spatial_reference))
-        self._lazy_ogr_geometry: ogr.Geometry = None  #: an OGR geometry equivalent to this geometry, created lazily
-        self._lazy_envelope: 'Envelope' = None  #: the geometry's envelope, created lazily
-        self._cached_transforms: Dict[int, Geometry] = {}  #: a cache of transformed geometries
+        self._caches: Dict[str, Any] = {}  #: a repository for cached and lazily-initialized objects
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -283,17 +281,22 @@ class Geometry(object):
 
         :return: the geometry's envelope
         """
-        # If we haven't already created the envelope...
-        if self._lazy_envelope is None:
-            # ...do so now.
+        # If we've already generated the envelope once...
+        if 'envelope' in self._caches:
+            # ...just return it.
+            return self._caches['envelope']
+        else:
+            # Otherwise, it looks like we need to create it now.
             bounds = self.shapely.bounds
-            self._lazy_envelope = Envelope(min_x=bounds[0],
-                                           min_y=bounds[1],
-                                           max_x=bounds[2],
-                                           max_y=bounds[3],
-                                           spatial_reference=self.spatial_reference)
-        # Return the cached envelope.
-        return self._lazy_envelope
+            envelope = Envelope(min_x=bounds[0],
+                                min_y=bounds[1],
+                                max_x=bounds[2],
+                                max_y=bounds[3],
+                                spatial_reference=self.spatial_reference)
+            # Cache it for next time.
+            self._caches['envelope'] = envelope
+            # Now we can give it to the caller.
+            return envelope
 
     @property
     def spatial_reference(self) -> SpatialReference:
@@ -323,8 +326,8 @@ class Geometry(object):
         :return: the OGR geometry equivalent
         """
         # If we have already created the OGR geometry once, just return it again.
-        if from_cache and self._lazy_ogr_geometry is not None:
-            return self._lazy_ogr_geometry
+        if from_cache and 'ogr_geometry' in self._caches is not None:
+            return self._caches['ogr_geometry']
         # Perform the WKB->OGR Geometry conversion.
         ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
         # Assign the spatial reference.
@@ -339,6 +342,17 @@ class Geometry(object):
         :param spatial_reference: the target spatial reference
         :return: the new transformed geometry
         """
+        # Retrieve (or create) the dictionary of cached transforms.
+        cached_transforms: Dict[int, Geometry] = None  # We're just declaring it here.
+        # If we've already created the cache...
+        if 'transforms' in self._caches:
+            # ...we should use it.
+            cached_transforms = self._caches['transforms']
+        else:
+            # Otherwise, create one...
+            cached_transforms = {}
+            # ...and add it to the caches.
+            self._caches['transforms'] = cached_transforms
         # Figure out the target spatial reference.
         sr: SpatialReference = (
             spatial_reference if isinstance(spatial_reference, SpatialReference)
@@ -349,9 +363,9 @@ class Geometry(object):
             # ...no transformation is necessary.
             return self
         # If we've already transformed for this spatial reference once...
-        if sr.srid in self._cached_transforms:
+        if sr.srid in cached_transforms:
             # ...just return the previous product.
-            return self._cached_transforms[sr.srid]
+            return cached_transforms[sr.srid]
         else:
             # We need the OGR geometry.
             ogr_geometry = self._get_ogr_geometry(from_cache=True)
@@ -360,7 +374,7 @@ class Geometry(object):
             # ...and build the new djio geometry from it.
             transformed_geometry = Geometry.from_ogr(ogr_geom=ogr_geometry)
             # Cache the shapely geometry in case somebody comes calling again.
-            self._cached_transforms[sr.srid] = transformed_geometry
+            cached_transforms[sr.srid] = transformed_geometry
             # Now we can return it.
             return transformed_geometry
 
@@ -490,8 +504,6 @@ class Point(Geometry):
         # Redefine the shapely geometry (mostly to help out the IDEs).
         self._shapely: ShapelyPoint = None
         super().__init__(shapely=shapely, spatial_reference=spatial_reference)
-        self._lazy_point_tuple: PointTuple = None  #: a cached tuple representation of this point, created lazily
-        self._lazy_latlon_tuple: LatLonTuple = None #: a cached latitude/longitude tuple representation, created on demand
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -546,12 +558,17 @@ class Point(Geometry):
 
         :return: the tuple representation of the point
         """
-        # If we haven't created and cached the tuple...
-        if self._lazy_point_tuple is None:
-            # ...let's do that now.
-            self._lazy_point_tuple = PointTuple(x=self.x, y=self.y, z=self.z, srid=self.spatial_reference.srid)
-        # Return the cached tuple.
-        return self._lazy_point_tuple
+        # If we've been here before...
+        if 'point_tuple' in self._caches:
+            # ...return the same result as last time.
+            return self._caches['point_tuple']
+        else:
+            # Otherwise, create a point tuple.
+            point_tuple = PointTuple(x=self.x, y=self.y, z=self.z, srid=self.spatial_reference.srid)
+            # Save it for next time.
+            self._caches['point_tuple'] = point_tuple
+            # Now give it back to the caller.
+            return point_tuple
 
     def to_latlon_tuple(self) -> LatLonTuple:
         """
@@ -559,14 +576,20 @@ class Point(Geometry):
 
         :return: the latitude/longitude tuple representation of this point
         """
-        # If we haven't created and cached the tuple...
-        if self._lazy_latlon_tuple is None:
+        # If we've been here before...
+        if 'latlon_tuple' in self._caches:
+            # ...return the same result as last time.
+            return self._caches['latlon_tuple']
+        else:  # Otherwise, we need to create it.
             # We can use this point's coordinates directly if it's already in WGS84, otherwise we need to project it
             # first.
             p = self if self.spatial_reference.srid == 4326 else self.transform(spatial_reference=4326)
-            self._lazy_latlon_tuple = LatLonTuple(latitude=p.y, longitude=p.x)
-        # Return the cached tuple.
-        return self._lazy_latlon_tuple
+            # Create the tuple.
+            latlon_tuple = LatLonTuple(latitude=p.y, longitude=p.x)
+            # Save it for next time.
+            self._caches['latlon_tuple'] = latlon_tuple
+            # Now give it back to the caller.
+            return latlon_tuple
 
     @staticmethod
     def from_point_tuple(point_tuple: PointTuple) -> 'Point':
