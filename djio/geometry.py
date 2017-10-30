@@ -468,9 +468,9 @@ class Geometry(object):
 
     @staticmethod
     def from_geoalchemy2(spatial_element: WKBElement or WKTElement,
-                         srid: int) -> 'Geometry':
+                         spatial_reference: SpatialReference or int) -> 'Geometry':
         shapely = to_shapely(spatial_element)
-        return Geometry.from_shapely(shapely=shapely, srid=srid)
+        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
 
 
 def _register_geometry_factory(geometry_type: GeometryType,
