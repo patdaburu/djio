@@ -282,10 +282,10 @@ class Geometry(object):
         :return: the geometry's envelope
         """
         # If we've already generated the envelope once...
-        if 'envelope' in self._caches:
+        try:
             # ...just return it.
             return self._caches['envelope']
-        else:
+        except KeyError:
             # Otherwise, it looks like we need to create it now.
             bounds = self.shapely.bounds
             envelope = Envelope(min_x=bounds[0],
@@ -326,12 +326,17 @@ class Geometry(object):
         :return: the OGR geometry equivalent
         """
         # If we have already created the OGR geometry once, just return it again.
-        if from_cache and 'ogr_geometry' in self._caches is not None:
-            return self._caches['ogr_geometry']
+        if from_cache:
+            try:
+                return self._caches['ogr_geometry']
+            except KeyError:
+                pass # This is OK.  It's just a cache miss.
         # Perform the WKB->OGR Geometry conversion.
         ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
         # Assign the spatial reference.
         ogr_geometry.AssignSpatialReference(self._spatial_reference.ogr_sr)
+        # Save it for next time.
+        self._caches['ogr_geometry'] = ogr_geometry
         # That's that!
         return ogr_geometry
 
@@ -345,10 +350,10 @@ class Geometry(object):
         # Retrieve (or create) the dictionary of cached transforms.
         cached_transforms: Dict[int, Geometry] = None  # We're just declaring it here.
         # If we've already created the cache...
-        if 'transforms' in self._caches:
+        try:
             # ...we should use it.
             cached_transforms = self._caches['transforms']
-        else:
+        except KeyError:
             # Otherwise, create one...
             cached_transforms = {}
             # ...and add it to the caches.
@@ -559,10 +564,10 @@ class Point(Geometry):
         :return: the tuple representation of the point
         """
         # If we've been here before...
-        if 'point_tuple' in self._caches:
+        try:
             # ...return the same result as last time.
             return self._caches['point_tuple']
-        else:
+        except KeyError:
             # Otherwise, create a point tuple.
             point_tuple = PointTuple(x=self.x, y=self.y, z=self.z, srid=self.spatial_reference.srid)
             # Save it for next time.
@@ -577,10 +582,10 @@ class Point(Geometry):
         :return: the latitude/longitude tuple representation of this point
         """
         # If we've been here before...
-        if 'latlon_tuple' in self._caches:
+        try:
             # ...return the same result as last time.
             return self._caches['latlon_tuple']
-        else:  # Otherwise, we need to create it.
+        except KeyError:  # Otherwise, we need to create it.
             # We can use this point's coordinates directly if it's already in WGS84, otherwise we need to project it
             # first.
             p = self if self.spatial_reference.srid == 4326 else self.transform(spatial_reference=4326)
