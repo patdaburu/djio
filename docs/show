@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# This shell script launches the generated documentation in your browser.
+
+function showdoc(){
+    xdg-open "$*" &
+}
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+showdoc "$DIR/build/html/index.html"
