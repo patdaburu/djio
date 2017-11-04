@@ -27,6 +27,37 @@ from shapely.wkt import loads as loads_wkt
 from typing import Any, Dict, Callable, Optional, Set, Type
 
 
+class SpatialReferenceException(Exception):
+    """
+    Raised when something goes wrong with a spatial reference.
+    """
+    def __init__(self, message: str, inner: Exception=None):
+        """
+
+        :param message: the exception message
+        :param inner: the exception that caused this exception
+        """
+        super().__init__(message)
+        self._message: str = message
+        self._inner: Exception = inner
+
+    @property
+    def message(self) -> str:
+        """
+        Get the exception message.
+        :return: the exception message
+        """
+        return self._message
+
+    @property
+    def inner(self) -> Exception:
+        """
+        Get the inner exception that caused this exception.
+        :return: the inner exception
+        """
+        return self._inner
+
+
 class GeometryException(Exception):
     """
     Raised when something goes wrong with a geometry.
@@ -80,6 +111,12 @@ class SpatialReference(object):
     """
     _instances = {}  #: the instances of spatial reference that have been created
     _metric_linear_unit_names: Set[str] = {'meter', 'metre'}  #: metric linear distance unit names
+    _preferred_utm_srids: Dict[int, int] = {
+        zone: int('269{zone}'.format(zone=zone if zone > 9 else '0{zone}'.format(zone=zone))) for zone in range(1, 23)
+    }  #: a mapping of preferred SRIDs for supported UTM zones
+    # Add the known oddballs to the preferred UTM SRIDs dictionary.
+    _preferred_utm_srids[59] = 3372
+    _preferred_utm_srids[60] = 3373
 
     def __init__(self, srid: int):
         """
@@ -94,6 +131,24 @@ class SpatialReference(object):
             # Keep a handy reference to OGR spatial reference.
             self._ogr_srs = self._get_ogr_sr(self._srid)
             self._is_metric = SpatialReference._ogr_is_metric(self._ogr_srs)
+            # Is this a known UTM zone?
+            self._is_utm_zone: bool = self._srid in SpatialReference._preferred_utm_srids.values()
+            # We'll momentarily assume that there is no UTM zone associated with this spatial reference.
+            self._utm_zone: Optional[int] = None  #: the UTM zone associated with this spatial reference
+            # But now let's see if we find that the SRID appears in the dictionary of known UTM zones...
+            zones_for_srid = [
+                zone for zone in SpatialReference._preferred_utm_srids.keys()
+                if SpatialReference._preferred_utm_srids[zone] == self._srid
+            ]
+            # If we got at least
+            if len(zones_for_srid) != 0:
+                self._utm_zone = zones_for_srid[0]
+            # TODO: Check for multiples and log a warning, or raise an exception (?)
+            # If we didn't find the UTM zone in the dictionary, there's a possibility that the OGR spatial reference
+            # has some advice.
+            if self._utm_zone is None:
+                _ogr_srs_utm_zone = self._ogr_srs.GetUTMZone()
+                self._utm_zone = _ogr_srs_utm_zone if _ogr_srs_utm_zone != 0 else None
 
     def __new__(cls, srid: int):
         # If this spatial reference has already been created...
@@ -152,6 +207,18 @@ class SpatialReference(object):
         """
         return self._ogr_srs.IsProjected() == 1
 
+    @property
+    def utm_zone(self) -> int or None:
+        """
+        Get the UTM (Universal Trans-Mercator) zone associated with this spatial reference.
+        :return: the associated UTM zone
+        """
+        return self._utm_zone
+
+    @property
+    def is_utm_zone(self) -> bool:
+        return self._is_utm_zone
+
     @staticmethod
     def _ogr_is_metric(ogr_sr: ogr.osr.SpatialReference) -> bool:
         # If the coordinate system isn't projected...
@@ -203,13 +270,35 @@ class SpatialReference(object):
 
     @staticmethod
     def get_utm_from_longitude(longitude: float) -> 'SpatialReference':
-        zone = int(math.ceil(longitude + 180)/6)
+        """
+        Get the UTM (Universal Trans-Mercator) spatial reference for a given longitude.
+        :param longitude: the longitude
+        :return: the UTM spatial reference
+        :raises SpatialReferenceException: if the UTM zone has no supported spatial reference
+        """
+        zone = int(math.floor(longitude + 180)/6) + 1
         return SpatialReference.get_utm_for_zone(zone=zone)
 
     @staticmethod
     def get_utm_for_zone(zone: int) -> 'SpatialReference':
-        utm_srid = int('269{zone}'.format(zone=zone))
-        return SpatialReference.from_srid(srid=utm_srid)
+        """
+        Get the UTM (Universal Trans-Mercator) spatial reference for a given zone.
+        :param zone: the UTM zone
+        :return: the UTM spatial reference
+        :raises SpatialReferenceException: if the UTM zone has no supported spatial reference
+        """
+        srid = None  # We're going to try to fetch the preferred UTM srid.
+        try:
+            srid = SpatialReference._preferred_utm_srids[zone]
+        except KeyError:
+            raise SpatialReferenceException('Unsupported UTM zone: {zone}.'.format(zone=zone))
+        # Still here? Great.  That means that we do have a preferred spatial reference for this zone.
+        try:
+            # Let's start by trying to return an instance from the cache.
+            return SpatialReference._instances[srid]
+        except KeyError:
+            # If we missed in the cache, that's OK.  We'll create the new one now.
+            return SpatialReference.from_srid(srid=srid)
 
 
 class GeometryType(Enum):
