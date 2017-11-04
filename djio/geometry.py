@@ -132,7 +132,7 @@ class SpatialReference(object):
             self._ogr_srs = self._get_ogr_sr(self._srid)
             self._is_metric = SpatialReference._ogr_is_metric(self._ogr_srs)
             # Is this a known UTM zone?
-            self._is_utm_zone: bool = self._srid in SpatialReference._preferred_utm_srids.values()
+            self._is_utm: bool = self._srid in SpatialReference._preferred_utm_srids.values()
             # We'll momentarily assume that there is no UTM zone associated with this spatial reference.
             self._utm_zone: Optional[int] = None  #: the UTM zone associated with this spatial reference
             # But now let's see if we find that the SRID appears in the dictionary of known UTM zones...
@@ -216,8 +216,8 @@ class SpatialReference(object):
         return self._utm_zone
 
     @property
-    def is_utm_zone(self) -> bool:
-        return self._is_utm_zone
+    def is_utm(self) -> bool:
+        return self._is_utm
 
     @staticmethod
     def _ogr_is_metric(ogr_sr: ogr.osr.SpatialReference) -> bool:
@@ -398,6 +398,19 @@ class Geometry(object):
             return envelope
 
     @property
+    def representative_point(self) -> 'Point':
+        try:
+            # First, let's see if we've cached the point.
+            return self._caches['representative_point']
+        except KeyError:
+            # OK.  This is the first time it's been requested, so let's create it.
+            rp = Point(self.shapely.representative_point(), spatial_reference=self.spatial_reference)
+            # Add it to the cache for next time.
+            self._caches['representative_point'] = rp
+            # That's that.
+            return rp
+
+    @property
     def spatial_reference(self) -> SpatialReference:
         """
         Get the geometry's spatial reference.
@@ -439,6 +452,25 @@ class Geometry(object):
         # That's that!
         return ogr_geometry
 
+    def transform_to_utm(self) -> 'Geometry':
+        # If this geometry is already in a known UTM projection...
+        if self.spatial_reference.is_utm:
+            # ...just return it.
+            return self
+        elif self.spatial_reference.utm_zone is not None:
+            # OK, so we're not already in a UTM projection.  But it seems as though our spatial reference is
+            # associated with a UTM zone.
+            utm_sr: SpatialReference = SpatialReference.get_utm_for_zone(self.spatial_reference.utm_zone)
+            # Now we can just transform to this spatial reference.
+            return self.transform(spatial_reference=utm_sr)
+        else:  # Looks like we have more work to do.
+            # We need the envelope's representative point.
+            rp: Point = self.envelope.representative_point
+            # Use the longitude of the representative point to fetch the corresponding UTM zone.
+            utm_sr: SpatialReference = SpatialReference.get_utm_from_longitude(rp.to_latlon_tuple().longitude)
+            # Now we can transform accordingly.
+            return self.transform(spatial_reference=utm_sr)
+
     def transform(self, spatial_reference: SpatialReference or int) -> 'Geometry':
         """
         Create a new geometry based on this geometry but in another spatial reference.
@@ -476,7 +508,7 @@ class Geometry(object):
             # Transform the OGR geometry to the new coordinate system...
             ogr_geometry.TransformTo(sr.ogr_sr)
             # ...and build the new djio geometry from it.
-            transformed_geometry = Geometry.from_ogr(ogr_geom=ogr_geometry)
+            transformed_geometry: Geometry = Geometry.from_ogr(ogr_geom=ogr_geometry)
             # Cache the shapely geometry in case somebody comes calling again.
             cached_transforms[sr.srid] = transformed_geometry
             # Now we can return it.
@@ -645,6 +677,7 @@ class Point(Geometry):
 
         :return: the Z coordinate
         """
+        # noinspection PyUnresolvedReferences
         return self._shapely.z
 
     def flip_coordinates(self) -> 'Point':
@@ -730,7 +763,8 @@ class Point(Geometry):
         :return: :py:class:`Point`
         """
         shapely = ShapelyPoint(longitude, latitude)
-        return Point(shapely=shapely, spatial_reference=4326)
+        p = Point(shapely=shapely, spatial_reference=4326)
+        return p
 
     @staticmethod
     def from_coordinates(x: float,
