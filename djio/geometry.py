@@ -27,6 +27,8 @@ from shapely.wkt import loads as loads_wkt
 from typing import Any, Dict, Callable, Optional, Set, Type
 
 
+# TODO: Create a common abstract exception.
+
 class SpatialReferenceException(Exception):
     """
     Raised when something goes wrong with a spatial reference.
@@ -451,6 +453,13 @@ class Geometry(object):
         self._caches['ogr_geometry'] = ogr_geometry
         # That's that!
         return ogr_geometry
+
+    def project(self,
+                preferred_spatial_reference: SpatialReference or int = None,
+                fallback_spatial_reference: SpatialReference or int = 3857) -> 'Geometry':
+        return Projector.get_instance().project(geometry=self,
+                                                preferred_spatial_reference=preferred_spatial_reference,
+                                                fallback_spatial_reference=fallback_spatial_reference)
 
     def transform_to_utm(self) -> 'Geometry':
         # If this geometry is already in a known UTM projection...
@@ -904,6 +913,129 @@ class Envelope(Polygon):
         # Construct a Shapely polygon using the box() function, and let the parent take it from here.
         super().__init__(shapely=box(minx=min_x, miny=min_y, maxx=max_x, maxy=max_y),
                          spatial_reference=spatial_reference)
+
+
+class Projector(object):
+    """
+    Use a projector to get a projected version of a geographic geometry, or to re-project a projected geometry.
+    """
+    _instance: 'Projector' = None  #: the shared projector instance
+
+    @staticmethod
+    def set_instance(projector: 'Projector'):
+        """
+        Set the shared projector instance.
+        :param projector: the shared projector
+        """
+        Projector._instance = projector
+
+    @staticmethod
+    def get_instance() -> 'Projector':
+        """
+        Get the shared projector instance.
+        :return: the shared projector instance
+        """
+        return Projector._instance
+
+    @staticmethod
+    def project(geometry: Geometry,
+                preferred_spatial_reference: SpatialReference or int=None,
+                fallback_spatial_reference: SpatialReference or int=3857) -> Geometry:
+        """
+        Project a geometry.
+        :param geometry: the original geometry
+        :param preferred_spatial_reference: the preferred spatial reference (If no preferred spatial reference is
+            supplied, the projector will attempt to select an appropriate metric projection.)
+        :param fallback_spatial_reference: the fallback spatial reference (if your preferred spatial reference isn't
+            available)
+        :return: the projected geometry
+        """
+        # Do a sanity check on the original geometry.
+        if geometry is None:
+            raise TypeError("The 'geometry' argument cannot be None.")
+        # Before we do any additional work, let's see if we can simply meet the request by returning the original
+        # geometry.
+        if (geometry.spatial_reference.is_projected    # If it's already projected...
+            and geometry.spatial_reference.is_metric   # ...and metric...
+            and preferred_spatial_reference is None):  # ...and no other spatial reference is preferred...
+            # ...we can just return the original geometry
+            return geometry
+
+        # Figure out the fallback spatial reference.  (We may need it shortly.)
+        _fallback_sr: SpatialReference = None
+        # If a fallback spatial reference was supplied...
+        if fallback_spatial_reference is not None:
+            # ...let's make sure it is actually a spatial reference.
+            _fallback_sr = (
+                fallback_spatial_reference if isinstance(fallback_spatial_reference, SpatialReference)
+                else SpatialReference(fallback_spatial_reference)
+            )
+
+        # If no spatial reference is preferred...
+        if preferred_spatial_reference is None:
+            try:
+                # Try to apply default logic.
+                return geometry.transform_to_utm()
+            except (GeometryException, SpatialReferenceException):
+                # Didn't work eh?  Well, let's check the fallback spatial reference to make sure it meets the
+                # criteria.
+                if not fallback_spatial_reference.is_projected:  # Not projected?
+                    raise SpatialReferenceException(
+                        'No preferred spatial reference was supplied and the fallback is not projected.'
+                    )
+                elif not fallback_spatial_reference.is_metric:  # Not metric?
+                    raise SpatialReferenceException(
+                        'No preferred spatial reference was supplied and the fallback is not metric.'
+                    )
+                else:
+                    # It looks like we can use the fallback.
+                    return geometry.transform(spatial_reference=fallback_spatial_reference)
+        else:
+            # Create a variable to hold whatever we determine the target spatial reference will be.
+            _pref_sr: SpatialReference = None
+
+            # If a preferred spatial reference was supplied...
+            if preferred_spatial_reference is not None:
+                # ...let's make sure it is actually a spatial reference.
+                _pref_sr = (
+                    preferred_spatial_reference if isinstance(preferred_spatial_reference, SpatialReference)
+                    else SpatialReference(preferred_spatial_reference)
+                )
+            # Before doing more work, let's check: Is the preferred spatial reference the same as the geometry's
+            # current spatial reference, and if so...
+            if preferred_spatial_reference.srid == geometry.spatial_reference.srid:
+                return geometry
+            else:
+                try:
+                    # Try to perform the transformation to the preferred spatial reference.
+                    return geometry.transform(spatial_reference=preferred_spatial_reference)
+                except (GeometryException, SpatialReferenceException):
+                    # Didn't work eh?  Well, let's check the fallback spatial reference to make sure it meets the
+                    # criteria.
+                    if not fallback_spatial_reference.is_projected:  # Not projected?
+                        raise SpatialReferenceException(
+                            'No preferred spatial reference was supplied and the fallback is not projected.'
+                        )
+                    elif not fallback_spatial_reference.is_metric:  # Not metric?
+                        raise SpatialReferenceException(
+                            'No preferred spatial reference was supplied and the fallback is not metric.'
+                        )
+                    else:
+                        # It looks like we can use the fallback.
+                        return geometry.transform(spatial_reference=fallback_spatial_reference)
+
+# Set the default projector instance.
+Projector.set_instance(Projector())
+
+
+
+
+
+
+
+
+
+
 
 
 
