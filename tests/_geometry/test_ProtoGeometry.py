@@ -27,7 +27,8 @@ class TestProtoGeometrySuite(unittest.TestCase):
         p: Polyline = proto.to_polyline()
         # There you go.
         self.assertEqual(
-            '<gml:LineString srsName="urn:ogc:def:crs:EPSG::26915"><gml:posList>415595.186865569 5150191.11554508 952676.147829255 5166538.99156226 414060.603356157 5039084.94282137</gml:posList></gml:LineString>',
+            '<gml:LineString srsName="urn:ogc:def:crs:EPSG::26915"><gml:posList>415595.186865569 5150191.11554508 ' + \
+            '952676.147829255 5166538.99156226 414060.603356157 5039084.94282137</gml:posList></gml:LineString>',
             p.to_gml()
         )
 
@@ -44,6 +45,8 @@ class TestProtoGeometrySuite(unittest.TestCase):
         p: Polyline = proto.to_polygon()
         # There you go.
         self.assertEqual(
-            '<gml:Polygon srsName="urn:ogc:def:crs:EPSG::26915"><gml:exterior><gml:LinearRing><gml:posList>415595.186865569 5150191.11554508 952676.147829255 5166538.99156226 414060.603356157 5039084.94282137 415595.186865569 5150191.11554508</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon>',
+            '<gml:Polygon srsName="urn:ogc:def:crs:EPSG::26915"><gml:exterior><gml:LinearRing><gml:posList>' + \
+            '415595.186865569 5150191.11554508 952676.147829255 5166538.99156226 414060.603356157 5039084.94282137' +
+            ' 415595.186865569 5150191.11554508</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon>',
             p.to_gml()
         )
