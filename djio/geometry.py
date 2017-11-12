@@ -18,13 +18,14 @@ from geoalchemy2.shape import from_shape as from_shapely
 import math
 from measurement.measures import Area, Distance
 import re
+import shapely.errors
 from shapely.geometry import box, Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Any, Dict, Callable, Optional, Set, Type
+from typing import Any, Dict, Callable, List, Optional, Set, Type
 
 
 # TODO: Create a common abstract exception.
@@ -220,6 +221,19 @@ class SpatialReference(object):
     @property
     def is_utm(self) -> bool:
         return self._is_utm
+
+    def is_same_as(self, other: 'SpatialReference' or int) -> bool:
+        """
+        Test a spatial reference or SRID to see if it represents this spatial reference.
+        :param other: the other spatial reference (or SRID)
+        :return: ``True`` if the other parameter represents the same spatial reference, otherwise ``False``
+        """
+        if other == self:  # Let's do the quickest test first!
+            return True
+        elif isinstance(other, SpatialReference):
+            return other.srid == self.srid
+        else:
+            return other == self.srid
 
     @staticmethod
     def _ogr_is_metric(ogr_sr: ogr.osr.SpatialReference) -> bool:
@@ -456,7 +470,7 @@ class Geometry(object):
 
     def project(self,
                 preferred_spatial_reference: SpatialReference or int = None,
-                fallback_spatial_reference: SpatialReference or int = 3857) -> 'Geometry':
+                fallback_spatial_reference: SpatialReference or int or None = 3857) -> 'Geometry':
         return Projector.get_instance().project(geometry=self,
                                                 preferred_spatial_reference=preferred_spatial_reference,
                                                 fallback_spatial_reference=fallback_spatial_reference)
@@ -686,8 +700,11 @@ class Point(Geometry):
 
         :return: the Z coordinate
         """
-        # noinspection PyUnresolvedReferences
-        return self._shapely.z
+        #noinspection PyUnresolvedReferences
+        try:
+            return self._shapely.z
+        except shapely.errors.DimensionError:
+            return None
 
     def flip_coordinates(self) -> 'Point':
         """
@@ -759,7 +776,8 @@ class Point(Geometry):
         :param latlon_tuple: the latitude/longitude tuple
         :return: the new point
         """
-        pt: PointTuple = PointTuple(x=latlon_tuple.longitude, y=latlon_tuple.latitude, srid=4326)
+        # TODO: 3D (Note that z=0.0 is hard-coded.)
+        pt: PointTuple = PointTuple(x=latlon_tuple.longitude, y=latlon_tuple.latitude, z=0.0, srid=4326)
         return Point.from_point_tuple(pt)
 
     @staticmethod
@@ -1026,6 +1044,72 @@ class Projector(object):
 
 # Set the default projector instance.
 Projector.set_instance(Projector())
+
+# TODO: Break proto-geometries out into another module!
+
+
+class ProtoGeometry(object):
+    """
+    Use a proto-geometry build up a new geometry from individual coordinates.
+    """
+
+    def __init__(self,
+                 spatial_reference: SpatialReference or int=4326,
+                 projector: Projector = None):
+        self._projector = projector if projector is not None else Projector.get_instance()
+        self._spatial_reference = (
+            spatial_reference if isinstance(spatial_reference, SpatialReference)
+            else SpatialReference(srid=spatial_reference)
+        )  # the proto-geometry's spatial reference
+        self._exterior: List[PointTuple] = []  #: the exterior points
+        self._interiors: List['ProtoGeometry'] = []  #: the interior rings  #TODO: Deal with interiors.
+
+    def clear(self):
+        raise NotImplementedError()
+
+    def add(self, p: Point or PointTuple or LatLonTuple):
+        """
+        Add a point to the prototype's exterior
+        :param p: the point to add
+        :return:
+        """
+        pt: PointTuple = self.conform(p)
+        tup = (pt.x, pt.y, pt.z) if pt.z is not None else (pt.x, pt.y)
+        self._exterior.append(tup)
+
+    def conform(self, p: Point or PointTuple or LatLonTuple) -> PointTuple:
+        # Check the simplest case before we do anything else.
+        if isinstance(p, PointTuple) and self._spatial_reference.is_same_as(p.srid):
+            return p
+        # OK. One way or the other, we're going to have to take the original value and convert it to a Point.
+        pt: Point = None
+        if isinstance(p, PointTuple):
+            pt = Point.from_point_tuple(p)
+        elif isinstance(p, LatLonTuple):
+            pt = Point.from_latlon_tuple(p)
+        elif isinstance(p, Point):
+            pt = p
+        else:
+            # What?  None of the conditions above matched?!
+            raise TypeError("Unsupported type: {type}.".format(type=type(p)))
+        # If our Point is already in the correct spatial reference...
+        if self._spatial_reference.is_same_as(pt.spatial_reference):
+            return pt.to_point_tuple()
+        else:
+            # Otherwise we need to project it first.
+            pt_proj: Point = pt.project(self._spatial_reference)
+            # Now we can return it.
+            return pt_proj.to_point_tuple()
+
+    def to_polyline(self):
+        if len(self._exterior) == 0:
+            raise GeometryException('The collection is empty.')
+        shapely = LineString(self._exterior)
+        return Geometry.from_shapely(shapely=shapely, spatial_reference=self._spatial_reference)
+
+
+
+
 
 
 
