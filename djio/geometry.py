@@ -1107,6 +1107,12 @@ class ProtoGeometry(object):
         shapely = LineString(self._exterior)
         return Geometry.from_shapely(shapely=shapely, spatial_reference=self._spatial_reference)
 
+    def to_polygon(self):
+        if len(self._exterior) == 0:
+            raise GeometryException('The collection is empty.')
+        shapely = ShapelyPolygon(self._exterior)
+        return Geometry.from_shapely(shapely=shapely, spatial_reference=self._spatial_reference)
+
 
 
 
