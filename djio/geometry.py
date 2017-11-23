@@ -612,14 +612,14 @@ class Geometry(object):
 
     @staticmethod
     def from_wkt(wkt: str, spatial_reference: SpatialReference or int) -> 'Geometry':
-        shapely = loads_wkt(wkt)
-        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
+        _shapely = loads_wkt(wkt)
+        return Geometry.from_shapely(shapely=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_wkb(wkb: str, spatial_reference: SpatialReference or int) -> 'Geometry':
         # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
-        shapely = loads_wkb(wkb)
-        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
+        _shapely = loads_wkb(wkb)
+        return Geometry.from_shapely(shapely=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_gml(gml: str) -> 'Geometry':
@@ -700,7 +700,7 @@ class Point(Geometry):
 
         :return: the Z coordinate
         """
-        #noinspection PyUnresolvedReferences
+        # noinspection PyUnresolvedReferences
         try:
             return self._shapely.z
         except shapely.errors.DimensionError:
@@ -712,8 +712,8 @@ class Point(Geometry):
 
         :return: a new :py:class:`Geometry` with reversed ordinals.
         """
-        shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
-        return Point(shapely=shapely, spatial_reference=self.spatial_reference)
+        _shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
+        return Point(shapely=_shapely, spatial_reference=self.spatial_reference)
 
     def to_point_tuple(self) -> PointTuple:
         """
@@ -789,8 +789,8 @@ class Point(Geometry):
         :param longitude: the longitude
         :return: :py:class:`Point`
         """
-        shapely = ShapelyPoint(longitude, latitude)
-        p = Point(shapely=shapely, spatial_reference=4326)
+        _shapely = ShapelyPoint(longitude, latitude)
+        p = Point(shapely=_shapely, spatial_reference=4326)
         return p
 
     @staticmethod
@@ -807,8 +807,8 @@ class Point(Geometry):
         :param z: the Z coordinate
         :return: the new :py:class:`Point`
         """
-        shapely = ShapelyPoint(x, y, z) if z is not None else ShapelyPoint(x,y)
-        return Point(shapely=shapely, spatial_reference=spatial_reference)
+        _shapely = ShapelyPoint(x, y, z) if z is not None else ShapelyPoint(x,y)
+        return Point(shapely=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_shapely(shapely: ShapelyPoint,
@@ -1065,19 +1065,28 @@ class ProtoGeometry(object):
         self._interiors: List['ProtoGeometry'] = []  #: the interior rings  #TODO: Deal with interiors.
 
     def clear(self):
-        raise NotImplementedError()
+        """
+        Clear the current contents.
+        """
+        self._exterior = []
+        self._interiors = []
 
     def add(self, p: Point or PointTuple or LatLonTuple):
         """
         Add a point to the prototype's exterior
-        :param p: the point to add
-        :return:
+        :param p: the new coordinate you want to add
         """
-        pt: PointTuple = self.conform(p)
+        pt: PointTuple = self._conform(p)
         tup = (pt.x, pt.y, pt.z) if pt.z is not None else (pt.x, pt.y)
         self._exterior.append(tup)
 
-    def conform(self, p: Point or PointTuple or LatLonTuple) -> PointTuple:
+    def _conform(self, p: Point or PointTuple or LatLonTuple) -> PointTuple:
+        """
+        Make sure a given point, point tuple, or lat/lon tuple conforms to the other point tuples in this
+        proto-geometry.
+        :param p: the original coordinate
+        :return: either the original coordinate, or a new :py:class:`PointTuple` that conforms to this geometry
+        """
         # Check the simplest case before we do anything else.
         if isinstance(p, PointTuple) and self._spatial_reference.is_same_as(p.srid):
             return p
@@ -1101,17 +1110,27 @@ class ProtoGeometry(object):
             # Now we can return it.
             return pt_proj.to_point_tuple()
 
-    def to_polyline(self):
+    def to_polyline(self) -> Polyline:
+        """
+        Create a :py:class:`Polyline` from the contents of this proto-geometry.
+        :return: the :py:class:`Polyline`
+        """
         if len(self._exterior) == 0:
             raise GeometryException('The collection is empty.')
-        shapely = LineString(self._exterior)
-        return Geometry.from_shapely(shapely=shapely, spatial_reference=self._spatial_reference)
+        _shapely = LineString(self._exterior)
+        # noinspection PyTypeChecker
+        return Geometry.from_shapely(shapely=_shapely, spatial_reference=self._spatial_reference)
 
-    def to_polygon(self):
+    def to_polygon(self) -> Polygon:
+        """
+        Create a :py:class:`Polygon` from the contents of this proto-geometry.
+        :return: the :py:class:`Polygon`
+        """
         if len(self._exterior) == 0:
             raise GeometryException('The collection is empty.')
-        shapely = ShapelyPolygon(self._exterior)
-        return Geometry.from_shapely(shapely=shapely, spatial_reference=self._spatial_reference)
+        _shapely = ShapelyPolygon(self._exterior)
+        # noinspection PyTypeChecker
+        return Geometry.from_shapely(shapely=_shapely, spatial_reference=self._spatial_reference)
 
 
 
