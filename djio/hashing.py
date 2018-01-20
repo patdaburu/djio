@@ -23,23 +23,23 @@ def int_to_bytes(i: int, width: int):
     i_array = [0] * width
     mask = 255
     for idx in range(0, width):
-        _mask = mask << idx * 8
-        i_array[idx] = (i & _mask) >> idx * 8
-    # Reverse the array (so the bigger parts of the number come before the littler ones, i.e. we want the array to be
-    # "big endian")
-    i_array.reverse()
+        _idx = width - idx - 1
+        _mask = mask << (_idx * 8)
+        i_array[idx] = (i & _mask) >> (_idx * 8)
     return bytes(i_array)
 
+
 def bytes_to_int(b: bytes):
+    """
+    Convert a byte array to an integer.
+
+    :param b: the byte array
+    :return: the integer
+    """
     i = 0
     width = len(b)
-    # We expect the byte array to be "big endian", so the biggest parts of the number will come before the smaller
-    # parts.  To make the rest of this process simpler, let's just reverse the array so we get to the little parts
-    # first.
-    _b = list(b)  # TODO: We have an optimization opportunity here!
-    _b.reverse()
     for idx in range(0, width):
-        i_at_idx = _b[idx] << idx * 8
+        i_at_idx = b[idx] << (width - idx - 1) * 8
         i = i + i_at_idx
     return i
 
@@ -60,6 +60,9 @@ def djiohash_v1(geometry_type_code: int,
     # The last two bits in this byte are presently available.
     # 000000☐☐ <-- These are available.
     b1 = b1_geometry_type & b1_is_collection & b1_has_m_values
+
+    # Bytes 2-4 describe the SRID.
+    b2_4 = int_to_bytes(srid, width=3)
 
 
 
