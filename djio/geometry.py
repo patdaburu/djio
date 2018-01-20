@@ -8,6 +8,7 @@
 Working with geometries?  Need help?  Here it is!
 """
 
+from . import hashing
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
 from enum import Enum
@@ -34,7 +35,8 @@ class SpatialReferenceException(Exception):
     """
     Raised when something goes wrong with a spatial reference.
     """
-    def __init__(self, message: str, inner: Exception=None):
+
+    def __init__(self, message: str, inner: Exception = None):
         """
 
         :param message: the exception message
@@ -65,7 +67,8 @@ class GeometryException(Exception):
     """
     Raised when something goes wrong with a geometry.
     """
-    def __init__(self, message: str, inner: Exception=None):
+
+    def __init__(self, message: str, inner: Exception = None):
         """
 
         :param message: the exception message
@@ -91,6 +94,7 @@ class GeometryException(Exception):
         """
         return self._inner
 
+
 PointTuple = namedtuple('PointTuple', ['x', 'y', 'z', 'srid'])  #: a lightweight tuple that represents a point
 
 LatLonTuple = namedtuple('LatLonTuple', ['latitude', 'longitude'])  #: a lightweight tuple that represents a location
@@ -100,7 +104,7 @@ class LateralSides(Enum):
     """
     This is a simple enumeration that identifies the lateral side of line (left or right).
     """
-    LEFT = 'left'    #: the left side of the line
+    LEFT = 'left'  #: the left side of the line
     RIGHT = 'right'  #: the right side of the line
 
 
@@ -292,7 +296,7 @@ class SpatialReference(object):
         :return: the UTM spatial reference
         :raises SpatialReferenceException: if the UTM zone has no supported spatial reference
         """
-        zone = int(math.floor(longitude + 180)/6) + 1
+        zone = int(math.floor(longitude + 180) / 6) + 1
         return SpatialReference.get_utm_for_zone(zone=zone)
 
     @staticmethod
@@ -321,10 +325,11 @@ class GeometryType(Enum):
     """
     These are the supported geometric data types.
     """
-    UNKNOWN: int = 0   #: The geometry type is unknown.
-    POINT: int = 1     #: a point geometry
+    UNKNOWN: int = 0  #: The geometry type is unknown.
+    POINT: int = 1  #: a point geometry
     POLYLINE: int = 2  #: a polyline geometry
-    POLYGON: int = 3   #: a polygon geometry
+    POLYGON: int = 3  #: a polygon geometry
+
 
 _shapely_geom_type_map: Dict[str, GeometryType] = {
     'point': GeometryType.POINT,
@@ -332,7 +337,6 @@ _shapely_geom_type_map: Dict[str, GeometryType] = {
     'linearring': GeometryType.POLYLINE,
     'polygon': GeometryType.POLYGON
 }  #: a mapping Shapely geometry types strings to Djio geometry types
-
 
 _geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, SpatialReference], 'Geometry']] = {
 
@@ -351,16 +355,26 @@ class Geometry(object):
         r"srid=(?P<srid>\d+)\s*;\s*(?P<wkt>.*)",
         flags=re.IGNORECASE)  #: a regex that matches extended WKT (EWKT)
 
+    # This is the function we use to hash geometries.
+    _djiohash: Callable = hashing.djiohash_v1
+
+    _djiohash_tx = {
+        GeometryType.UNKNOWN:  0,
+        GeometryType.POINT:    1,
+        GeometryType.POLYLINE: 2,
+        GeometryType.POLYGON:  3
+    }
+
     def __init__(self,
-                 shapely: BaseGeometry,
-                 spatial_reference: SpatialReference or int=None):
+                 shapely_geometry: BaseGeometry,
+                 spatial_reference: SpatialReference or int = None):
         """
 
-        :param shapely: a Shapely geometry
+        :param shapely_geometry: a Shapely geometry
         :param spatial_reference: the geometry's spatial reference
         """
         # Keep that reference to the Shapely geometry.
-        self._shapely: BaseGeometry = shapely
+        self._shapely: BaseGeometry = shapely_geometry
         # Let's figure out what the spatial reference is.  (It might be an instance of SpatialReference, or it might
         # be the SRID.)
         self._spatial_reference: SpatialReference = (spatial_reference
@@ -379,6 +393,10 @@ class Geometry(object):
             return _shapely_geom_type_map[self._shapely.geom_type.lower()]
         except KeyError:
             return GeometryType.UNKNOWN
+
+    @abstractmethod
+    def dimensions(self) -> int:
+        raise NotImplementedError('This property must be implemented by the subclass.')
 
     @property
     def shapely(self) -> BaseGeometry:
@@ -446,6 +464,14 @@ class Geometry(object):
         # do to it once we send it back.)
         return self._get_ogr_geometry(from_cache=False)
 
+    def djiohash(self):
+        """
+        Get this geometry's hash value.
+
+        :return: the hash value
+        """
+        return Geometry._djiohash(geometry_type_code=Geometry._djiohash[self.geometry_type])
+
     def _get_ogr_geometry(self, from_cache: bool = True) -> ogr.Geometry:
         """
         Subclasses can use this method to get the OGR geometry equivalent.
@@ -458,7 +484,7 @@ class Geometry(object):
             try:
                 return self._caches['ogr_geometry']
             except KeyError:
-                pass # This is OK.  It's just a cache miss.
+                pass  # This is OK.  It's just a cache miss.
         # Perform the WKB->OGR Geometry conversion.
         ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
         # Assign the spatial reference.
@@ -537,7 +563,7 @@ class Geometry(object):
             # Now we can return it.
             return transformed_geometry
 
-    def to_gml(self, version: int or str=3) -> str:
+    def to_gml(self, version: int or str = 3) -> str:
         """
         Export the geometry to GML.
 
@@ -559,12 +585,12 @@ class Geometry(object):
         raise NotImplementedError('The subclass must implement this method.')
 
     @staticmethod
-    def from_shapely(shapely: BaseGeometry,
-                     spatial_reference:  SpatialReference or int) -> 'Geometry':
+    def from_shapely(shapely_geometry: BaseGeometry,
+                     spatial_reference: SpatialReference or int) -> 'Geometry':
         """
         Create a new geometry based on a Shapely :py:class:`BaseGeometry`.
 
-        :param shapely: the Shapely base geometry
+        :param shapely_geometry: the Shapely base geometry
         :param spatial_reference: the spatial reference (or spatial reference ID)
         :return: the new geometry
         :seealso:  :py:class:`Point`
@@ -572,12 +598,12 @@ class Geometry(object):
         :seealso: :py:class:`Polygon`
         """
         # Get Shapely's version of the geometry type.  (Note that the keys in the dictionary are all lower-cased.)
-        geometry_type: GeometryType = _shapely_geom_type_map[shapely.geom_type.lower()]
+        geometry_type: GeometryType = _shapely_geom_type_map[shapely_geometry.geom_type.lower()]
         # With this information, we can use the registered function to create the djio geometry.
-        return _geometry_factory_functions[geometry_type](shapely, spatial_reference)
+        return _geometry_factory_functions[geometry_type](shapely_geometry, spatial_reference)
 
     @staticmethod
-    def from_ogr(ogr_geom: ogr.Geometry, spatial_reference: SpatialReference or int=None) -> 'Geometry':
+    def from_ogr(ogr_geom: ogr.Geometry, spatial_reference: SpatialReference or int = None) -> 'Geometry':
         # Grab the spatial reference from the arguments.
         _sr = spatial_reference
         # If the caller didn't provide one...
@@ -613,13 +639,13 @@ class Geometry(object):
     @staticmethod
     def from_wkt(wkt: str, spatial_reference: SpatialReference or int) -> 'Geometry':
         _shapely = loads_wkt(wkt)
-        return Geometry.from_shapely(shapely=_shapely, spatial_reference=spatial_reference)
+        return Geometry.from_shapely(shapely_geometry=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_wkb(wkb: str, spatial_reference: SpatialReference or int) -> 'Geometry':
         # https://geoalchemy-2.readthedocs.io/en/0.2.6/_modules/geoalchemy2/shape.html#to_shape
         _shapely = loads_wkb(wkb)
-        return Geometry.from_shapely(shapely=_shapely, spatial_reference=spatial_reference)
+        return Geometry.from_shapely(shapely_geometry=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_gml(gml: str) -> 'Geometry':
@@ -628,8 +654,8 @@ class Geometry(object):
     @staticmethod
     def from_geoalchemy2(spatial_element: WKBElement or WKTElement,
                          spatial_reference: SpatialReference or int) -> 'Geometry':
-        shapely = to_shapely(spatial_element)
-        return Geometry.from_shapely(shapely=shapely, spatial_reference=spatial_reference)
+        shapely_geometry = to_shapely(spatial_element)
+        return Geometry.from_shapely(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
 
 def _register_geometry_factory(geometry_type: GeometryType,
@@ -652,17 +678,18 @@ class Point(Geometry):
     dimensional attribute. A common interpretation is that the concept of a point is meant to capture the notion of a
     unique location in Euclidean space.
     """
+
     def __init__(self,
-                 shapely: ShapelyPoint,
+                 shapely_geometry: ShapelyPoint,
                  spatial_reference: SpatialReference or int = None):
         """
 
-        :param shapely: a Shapely geometry
+        :param shapely_geometry: a Shapely geometry
         :param spatial_reference: the geometry's spatial reference
         """
         # Redefine the shapely geometry (mostly to help out the IDEs).
         self._shapely: ShapelyPoint = None
-        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+        super().__init__(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -706,6 +733,10 @@ class Point(Geometry):
         except shapely.errors.DimensionError:
             return None
 
+    @property
+    def dimensions(self) -> int:
+        return 0
+
     def flip_coordinates(self) -> 'Point':
         """
         Create a point based on this one, but with the X and Y axis reversed.
@@ -713,7 +744,7 @@ class Point(Geometry):
         :return: a new :py:class:`Geometry` with reversed ordinals.
         """
         _shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
-        return Point(shapely=_shapely, spatial_reference=self.spatial_reference)
+        return Point(shapely_geometry=_shapely, spatial_reference=self.spatial_reference)
 
     def to_point_tuple(self) -> PointTuple:
         """
@@ -790,14 +821,14 @@ class Point(Geometry):
         :return: :py:class:`Point`
         """
         _shapely = ShapelyPoint(longitude, latitude)
-        p = Point(shapely=_shapely, spatial_reference=4326)
+        p = Point(shapely_geometry=_shapely, spatial_reference=4326)
         return p
 
     @staticmethod
     def from_coordinates(x: float,
                          y: float,
                          spatial_reference: SpatialReference or int,
-                         z: Optional[float]=None):
+                         z: Optional[float] = None):
         """
         Create a point from its coordinates.
 
@@ -807,8 +838,8 @@ class Point(Geometry):
         :param z: the Z coordinate
         :return: the new :py:class:`Point`
         """
-        _shapely = ShapelyPoint(x, y, z) if z is not None else ShapelyPoint(x,y)
-        return Point(shapely=_shapely, spatial_reference=spatial_reference)
+        _shapely = ShapelyPoint(x, y, z) if z is not None else ShapelyPoint(x, y)
+        return Point(shapely_geometry=_shapely, spatial_reference=spatial_reference)
 
     @staticmethod
     def from_shapely(shapely: ShapelyPoint,
@@ -821,11 +852,10 @@ class Point(Geometry):
         :return: the new geometry
         :seealso:  :py:func:`Geometry.from_shapely`
         """
-        return Point(shapely=shapely, spatial_reference=srid)
-
-
+        return Point(shapely_geometry=shapely, spatial_reference=srid)
 
     # TODO: Start adding Point-specific methods and properties.
+
 
 # Register the geometry factory function (which is just the constructor).
 _register_geometry_factory(GeometryType.POINT, Point)
@@ -839,10 +869,11 @@ class Polyline(Geometry):
     path,  polyline,  piecewise linear curve, broken line or, in geographic information systems (that's us), a
     linestring or linear ring.
     """
+
     def __init__(self,
-                 shapely: LineString or LinearRing,
+                 shapely_geometry: LineString or LinearRing,
                  spatial_reference: SpatialReference or int = None):
-        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+        super().__init__(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -853,7 +884,12 @@ class Polyline(Geometry):
         """
         return GeometryType.POLYLINE
 
+    @property
+    def dimensions(self) -> int:
+        return 1
+
     # TODO: Start adding Polyline-specific methods and properties.
+
 
 # Register the geometry factory function (which is just the constructor).
 _register_geometry_factory(GeometryType.POLYLINE, Polyline)
@@ -866,15 +902,16 @@ class Polygon(Geometry):
     points where two edges meet are the polygon's vertices (singular: vertex) or corners. The interior of the polygon is
     sometimes called its body.
     """
+
     def __init__(self,
-                 shapely: ShapelyPolygon,
+                 shapely_geometry: ShapelyPolygon,
                  spatial_reference: SpatialReference or int = None):
         """
 
-        :param shapely: a Shapely geometry
+        :param shapely_geometry: a Shapely geometry
         :param spatial_reference: the geometry's spatial reference
         """
-        super().__init__(shapely=shapely, spatial_reference=spatial_reference)
+        super().__init__(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
     @property
     def geometry_type(self) -> GeometryType:
@@ -885,7 +922,11 @@ class Polygon(Geometry):
         """
         return GeometryType.POLYGON
 
-    def get_area(self, spatial_reference: Optional[SpatialReference or int]=None) -> Area:
+    @property
+    def dimensions(self) -> int:
+        return 2
+
+    def get_area(self, spatial_reference: Optional[SpatialReference or int] = None) -> Area:
         # TODO: This method is *ripe* for refactoring!
         sr = spatial_reference
         if sr is None:
@@ -905,6 +946,7 @@ class Polygon(Geometry):
 
     # TODO: Start adding Polygon-specific methods and properties.
 
+
 # Register the geometry factory function (which is just the constructor).
 _register_geometry_factory(GeometryType.POLYGON, Polygon)
 
@@ -914,6 +956,7 @@ class Envelope(Polygon):
     An envelope represents the minimum bounding rectangle (minimum x and y values, along with maximum x and y values)
     defined by coordinate pairs of a geometry. All coordinates for the geometry fall within the envelope.
     """
+
     def __init__(self,
                  min_x: float,
                  min_y: float,
@@ -929,7 +972,7 @@ class Envelope(Polygon):
         :param spatial_reference: the spatial reference (or spatial reference ID) in which the coordinates are expressed
         """
         # Construct a Shapely polygon using the box() function, and let the parent take it from here.
-        super().__init__(shapely=box(minx=min_x, miny=min_y, maxx=max_x, maxy=max_y),
+        super().__init__(shapely_geometry=box(minx=min_x, miny=min_y, maxx=max_x, maxy=max_y),
                          spatial_reference=spatial_reference)
 
 
@@ -957,8 +1000,8 @@ class Projector(object):
 
     @staticmethod
     def project(geometry: Geometry,
-                preferred_spatial_reference: SpatialReference or int=None,
-                fallback_spatial_reference: SpatialReference or int=3857) -> Geometry:
+                preferred_spatial_reference: SpatialReference or int = None,
+                fallback_spatial_reference: SpatialReference or int = 3857) -> Geometry:
         """
         Project a geometry.
         :param geometry: the original geometry
@@ -973,9 +1016,9 @@ class Projector(object):
             raise TypeError("The 'geometry' argument cannot be None.")
         # Before we do any additional work, let's see if we can simply meet the request by returning the original
         # geometry.
-        if (geometry.spatial_reference.is_projected    # If it's already projected...
-            and geometry.spatial_reference.is_metric   # ...and metric...
-            and preferred_spatial_reference is None):  # ...and no other spatial reference is preferred...
+        if (geometry.spatial_reference.is_projected  # If it's already projected...
+                and geometry.spatial_reference.is_metric  # ...and metric...
+                and preferred_spatial_reference is None):  # ...and no other spatial reference is preferred...
             # ...we can just return the original geometry
             return geometry
 
@@ -1042,8 +1085,10 @@ class Projector(object):
                         # It looks like we can use the fallback.
                         return geometry.transform(spatial_reference=fallback_spatial_reference)
 
+
 # Set the default projector instance.
 Projector.set_instance(Projector())
+
 
 # TODO: Break proto-geometries out into another module!
 
@@ -1054,7 +1099,7 @@ class ProtoGeometry(object):
     """
 
     def __init__(self,
-                 spatial_reference: SpatialReference or int=4326,
+                 spatial_reference: SpatialReference or int = 4326,
                  projector: Projector = None):
         self._projector = projector if projector is not None else Projector.get_instance()
         self._spatial_reference = (
@@ -1119,7 +1164,7 @@ class ProtoGeometry(object):
             raise GeometryException('The collection is empty.')
         _shapely = LineString(self._exterior)
         # noinspection PyTypeChecker
-        return Geometry.from_shapely(shapely=_shapely, spatial_reference=self._spatial_reference)
+        return Geometry.from_shapely(shapely_geometry=_shapely, spatial_reference=self._spatial_reference)
 
     def to_polygon(self) -> Polygon:
         """
@@ -1130,22 +1175,5 @@ class ProtoGeometry(object):
             raise GeometryException('The collection is empty.')
         _shapely = ShapelyPolygon(self._exterior)
         # noinspection PyTypeChecker
-        return Geometry.from_shapely(shapely=_shapely, spatial_reference=self._spatial_reference)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return Geometry.from_shapely(shapely_geometry=_shapely, spatial_reference=self._spatial_reference)
 

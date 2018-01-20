@@ -5,5 +5,6 @@
 .. currentmodule:: __init__.py
 .. moduleauthor:: Pat Daburu <pat@daburu.net>
 
-Let's test the geometry module!
+Let's test the hashing module!
 """
+
