@@ -11,6 +11,8 @@ Welcome to djio's documentation!
    :caption: Contents:
 
    api
+   requirements
+   development
 
 
 

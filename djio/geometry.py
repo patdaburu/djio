@@ -963,9 +963,9 @@ class Projector(object):
         Project a geometry.
         :param geometry: the original geometry
         :param preferred_spatial_reference: the preferred spatial reference (If no preferred spatial reference is
-            supplied, the projector will attempt to select an appropriate metric projection.)
+        supplied, the projector will attempt to select an appropriate metric projection.)
         :param fallback_spatial_reference: the fallback spatial reference (if your preferred spatial reference isn't
-            available)
+        available)
         :return: the projected geometry
         """
         # Do a sanity check on the original geometry.
