@@ -11,6 +11,7 @@ Working with geometries?  Need help?  Here it is!
 from . import hashing
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
+from CaseInsensitiveDict import CaseInsensitiveDict
 from enum import Enum
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
@@ -338,6 +339,13 @@ _shapely_geom_type_map: Dict[str, GeometryType] = {
     'polygon': GeometryType.POLYGON
 }  #: a mapping Shapely geometry types strings to Djio geometry types
 
+_shapely_geom_dimensions_map: Dict[str, int] = {
+    'point': 0,
+    'linestring': 1,
+    'linearring': 1,
+    'polygon': 2
+}  #: a mapping Shapely geometry types strings to their respective dimensionalities
+
 _geometry_factory_functions: Dict[GeometryType, Callable[[BaseGeometry, SpatialReference], 'Geometry']] = {
 
 }  #: a hash of GeometryTypes to functions that can create that type from a base geometry
@@ -358,6 +366,7 @@ class Geometry(object):
     # This is the function we use to hash geometries.
     _djiohash: Callable = hashing.djiohash_v1
 
+    # This is a translation table of values to their equivalents for hashing purposes.
     _djiohash_tx = {
         GeometryType.UNKNOWN:  0,
         GeometryType.POINT:    1,
@@ -394,9 +403,19 @@ class Geometry(object):
         except KeyError:
             return GeometryType.UNKNOWN
 
-    @abstractmethod
     def dimensions(self) -> int:
-        raise NotImplementedError('This property must be implemented by the subclass.')
+        """
+        How many dimensions does this geometry occupy?  For example: a point is zero-dimensional (0); a line is
+        one-dimensional (1); and a polygon is two-dimensional (2).
+
+        :return: the dimensionality of the geometry
+        """
+        try:
+            return self._caches['dimensions']
+        except KeyError:
+            dimensions = _shapely_geom_dimensions_map[self.geometry_type.lower()]
+            self._caches['dimensions'] = dimensions
+            return dimensions
 
     @property
     def shapely(self) -> BaseGeometry:
@@ -738,6 +757,10 @@ class Point(Geometry):
 
     @property
     def dimensions(self) -> int:
+        """
+        A point is zero-dimensional (0)
+        :return: zero (0)
+        """
         return 0
 
     def flip_coordinates(self) -> 'Point':
@@ -889,6 +912,10 @@ class Polyline(Geometry):
 
     @property
     def dimensions(self) -> int:
+        """
+        A polyline is one-dimensional (1)
+        :return: one (1)
+        """
         return 1
 
     # TODO: Start adding Polyline-specific methods and properties.
@@ -927,6 +954,10 @@ class Polygon(Geometry):
 
     @property
     def dimensions(self) -> int:
+        """
+        A polygon is two-dimensional (2).
+        :return: two (2)
+        """
         return 2
 
     def get_area(self, spatial_reference: Optional[SpatialReference or int] = None) -> Area:
