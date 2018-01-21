@@ -76,7 +76,16 @@ class TestPointSuite(unittest.TestCase):
         self.assertTrue(p_tuple_2 == p_tuple)
 
     def test_pthash(self):  # TODO: Put this test elsewhere!
-        p = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
+        p1 = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
                                    spatial_reference=4326)
-        h = p.djiohash()
-        print(h)
+        h1 = p1.djiohash()
+
+        p2 = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
+                                    spatial_reference=4326)
+        h2 = p2.djiohash()
+        p3 = Point.from_coordinates(x=91.6, y=-46.1, z=1.0,
+                                    spatial_reference=4326)
+        h3 = p3.djiohash()
+
+        self.assertEqual(h1, h2)
+        self.assertNotEqual(h1, h3)

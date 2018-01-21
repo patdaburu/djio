@@ -19,6 +19,7 @@ from geoalchemy2.shape import to_shape as to_shapely
 from geoalchemy2.shape import from_shape as from_shapely
 import math
 from measurement.measures import Area, Distance
+import numpy as np
 import re
 import shapely.errors
 from shapely.geometry import box, Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
@@ -27,7 +28,7 @@ from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
-from typing import Any, Dict, Callable, List, Optional, Set, Type
+from typing import Any, Dict, Callable, Iterable, List, Optional, Set, Tuple, Type
 
 
 # TODO: Create a common abstract exception.
@@ -383,7 +384,7 @@ class Geometry(object):
         :param spatial_reference: the geometry's spatial reference
         """
         # Keep that reference to the Shapely geometry.
-        self._shapely: BaseGeometry = shapely_geometry
+        self._shapely_geometry: BaseGeometry = shapely_geometry
         # Let's figure out what the spatial reference is.  (It might be an instance of SpatialReference, or it might
         # be the SRID.)
         self._spatial_reference: SpatialReference = (spatial_reference
@@ -399,7 +400,7 @@ class Geometry(object):
         :return: the geometry's type
         """
         try:
-            return _shapely_geom_type_map[self._shapely.geom_type.lower()]
+            return _shapely_geom_type_map[self._shapely_geometry.geom_type.lower()]
         except KeyError:
             return GeometryType.UNKNOWN
 
@@ -407,7 +408,6 @@ class Geometry(object):
         """
         How many dimensions does this geometry occupy?  For example: a point is zero-dimensional (0); a line is
         one-dimensional (1); and a polygon is two-dimensional (2).
-
         :return: the dimensionality of the geometry
         """
         try:
@@ -417,14 +417,22 @@ class Geometry(object):
             self._caches['dimensions'] = dimensions
             return dimensions
 
+    @abstractmethod
+    def get_point_tuples(self) -> Iterable[PointTuple]:
+        """
+        Get an ordered iteration of all the coordinates in the geometry as point tuples.
+        :return: an enumeration of point tuples
+        """
+        raise NotImplementedError('The method is not implemented.')
+
     @property
-    def shapely(self) -> BaseGeometry:
+    def shapely_geometry(self) -> BaseGeometry:
         """
         Get the Shapely geometry underlying this geometry object.
 
         :return: the Shapely geometry
         """
-        return self._shapely
+        return self._shapely_geometry
 
     @property
     def envelope(self) -> 'Envelope':
@@ -439,7 +447,7 @@ class Geometry(object):
             return self._caches['envelope']
         except KeyError:
             # Otherwise, it looks like we need to create it now.
-            bounds = self.shapely.bounds
+            bounds = self.shapely_geometry.bounds
             envelope = Envelope(min_x=bounds[0],
                                 min_y=bounds[1],
                                 max_x=bounds[2],
@@ -457,11 +465,19 @@ class Geometry(object):
             return self._caches['representative_point']
         except KeyError:
             # OK.  This is the first time it's been requested, so let's create it.
-            rp = Point(self.shapely.representative_point(), spatial_reference=self.spatial_reference)
+            rp = Point(self.shapely_geometry.representative_point(), spatial_reference=self.spatial_reference)
             # Add it to the cache for next time.
             self._caches['representative_point'] = rp
             # That's that.
             return rp
+
+    @abstractmethod
+    def iter_coords(self) -> Iterable[Tuple[float, float] or Tuple[float, float, float]]:
+        """
+        Retrieve the coordinates that define this geometry as a flattened, ordered iteration.
+        :return: and ordered iteration of tuples that describe the geometry's coordinates
+        """
+        raise NotImplementedError('The method has not been implemented.')
 
     @property
     def spatial_reference(self) -> SpatialReference:
@@ -492,7 +508,7 @@ class Geometry(object):
         return Geometry._djiohash(
             geometry_type_code=Geometry._djiohash_tx[self.geometry_type],
             srid=self.spatial_reference.srid,
-            coordinates=self)
+            coordinates=self.iter_coords())
 
     def _get_ogr_geometry(self, from_cache: bool = True) -> ogr.Geometry:
         """
@@ -508,7 +524,7 @@ class Geometry(object):
             except KeyError:
                 pass  # This is OK.  It's just a cache miss.
         # Perform the WKB->OGR Geometry conversion.
-        ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely.wkb)
+        ogr_geometry: ogr.Geometry = ogr.CreateGeometryFromWkb(self._shapely_geometry.wkb)
         # Assign the spatial reference.
         ogr_geometry.AssignSpatialReference(self._spatial_reference.ogr_sr)
         # Save it for next time.
@@ -710,7 +726,7 @@ class Point(Geometry):
         :param spatial_reference: the geometry's spatial reference
         """
         # Redefine the shapely geometry (mostly to help out the IDEs).
-        self._shapely: ShapelyPoint = None
+        self._shapely_geometry: ShapelyPoint = None
         super().__init__(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
     @property
@@ -730,7 +746,7 @@ class Point(Geometry):
         :return: the X coordinate
         """
         # noinspection PyUnresolvedReferences
-        return self._shapely.x
+        return self._shapely_geometry.x
 
     @property
     def y(self) -> float:
@@ -740,7 +756,7 @@ class Point(Geometry):
         :return: the Y coordinate
         """
         # noinspection PyUnresolvedReferences
-        return self._shapely.y
+        return self._shapely_geometry.y
 
     @property
     def z(self) -> float or None:
@@ -751,7 +767,7 @@ class Point(Geometry):
         """
         # noinspection PyUnresolvedReferences
         try:
-            return self._shapely.z
+            return self._shapely_geometry.z
         except shapely.errors.DimensionError:
             return None
 
@@ -769,7 +785,7 @@ class Point(Geometry):
 
         :return: a new :py:class:`Geometry` with reversed ordinals.
         """
-        _shapely: ShapelyPoint = ShapelyPoint(self._shapely.y, self._shapely.x)
+        _shapely: ShapelyPoint = ShapelyPoint(self._shapely_geometry.y, self._shapely_geometry.x)
         return Point(shapely_geometry=_shapely, spatial_reference=self.spatial_reference)
 
     def to_point_tuple(self) -> PointTuple:
@@ -789,6 +805,19 @@ class Point(Geometry):
             self._caches['point_tuple'] = point_tuple
             # Now give it back to the caller.
             return point_tuple
+
+    def iter_coords(self) -> Iterable[Tuple[float, float] or Tuple[float, float, float]]:
+        """
+        Retrieve the coordinates that define this geometry.  For a :py:class:`Point`, the iteration shall contain a
+        single set of coordinates.
+        :return: an iteration containing a single tuple containing this point's coordinates
+        """
+        try:
+            return self._caches['iter_coords']
+        except KeyError:
+            _tuples = [(self.x, self.y, self.z) if self.z is not None else (self.x, self.y)]
+            self._caches['iter_coords'] = _tuples
+            return _tuples
 
     def to_latlon_tuple(self) -> LatLonTuple:
         """
@@ -918,6 +947,18 @@ class Polyline(Geometry):
         """
         return 1
 
+    def iter_coords(self) -> Iterable[Tuple[float, float] or Tuple[float, float, float]]:
+        """
+        Retrieve the coordinates that define this line.
+        :return: an iteration containing the polyline's coordinates
+        """
+        try:
+            return self._caches['iter_coords']
+        except KeyError:
+            _tuples = list(self._shapely_geometry.coords)  # TODO: This needs to be tested.  It may be necessary to do more transformation.
+            self._caches['iter_coords'] = _tuples
+            return _tuples
+
     # TODO: Start adding Polyline-specific methods and properties.
 
 
@@ -941,6 +982,8 @@ class Polygon(Geometry):
         :param shapely_geometry: a Shapely geometry
         :param spatial_reference: the geometry's spatial reference
         """
+        # Redefine the shapely geometry (mostly to help out the IDEs).
+        self._shapely_geometry: ShapelyPolygon = None
         super().__init__(shapely_geometry=shapely_geometry, spatial_reference=spatial_reference)
 
     @property
@@ -960,6 +1003,22 @@ class Polygon(Geometry):
         """
         return 2
 
+    def iter_coords(self) -> Iterable[Tuple[float, float] or Tuple[float, float, float]]:
+        """
+        Retrieve the polygon's coordinates as a flattened enumeration.
+        :return: an iteration containing the polyline's coordinates
+        """
+        # For more information, have a look at this:
+        # https://stackoverflow.com/questions/21824157/how-to-extract-interior-polygon-coordinates-using-shapely
+        try:
+            return self._caches['iter_coords']
+        except KeyError:
+            _tuples = list(self._shapely_geometry.exterior.coords[:])  # TODO: This needs to be tested.  It may be necessary to do more transformation.
+            for interior in self._shapely_geometry.interiors:
+                _tuples.extend(interior.coords[:])
+            self._caches['iter_coords'] = _tuples
+            return _tuples
+
     def get_area(self, spatial_reference: Optional[SpatialReference or int] = None) -> Area:
         # TODO: This method is *ripe* for refactoring!
         sr = spatial_reference
@@ -973,10 +1032,10 @@ class Polygon(Geometry):
         # At this point, we know we're dealing with a metric projected coordinate system, so...
         if sr.srid == self.spatial_reference.srid:
             # ...we can just create the area.
-            return Area(sq_m=self.shapely.area)
+            return Area(sq_m=self.shapely_geometry.area)
         else:
             # Otherwise, we need to transform the geometry to the target spatial reference, then get the area.
-            return Area(sq_m=self.transform(spatial_reference).shapely.area)
+            return Area(sq_m=self.transform(spatial_reference).shapely_geometry.area)
 
     # TODO: Start adding Polygon-specific methods and properties.
 
