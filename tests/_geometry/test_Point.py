@@ -74,3 +74,9 @@ class TestPointSuite(unittest.TestCase):
         # Create another tuple to make sure that we get the cached instance.
         p_tuple_2 = p.to_point_tuple()
         self.assertTrue(p_tuple_2 == p_tuple)
+
+    def test_pthash(self):  # TODO: Put this test elsewhere!
+        p = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
+                                   spatial_reference=4326)
+        h = p.djiohash()
+        print(h)

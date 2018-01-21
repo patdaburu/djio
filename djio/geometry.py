@@ -470,7 +470,10 @@ class Geometry(object):
 
         :return: the hash value
         """
-        return Geometry._djiohash(geometry_type_code=Geometry._djiohash[self.geometry_type])
+        return Geometry._djiohash(
+            geometry_type_code=Geometry._djiohash_tx[self.geometry_type],
+            srid=self.spatial_reference.srid,
+            coordinates=self)
 
     def _get_ogr_geometry(self, from_cache: bool = True) -> ogr.Geometry:
         """
