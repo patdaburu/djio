@@ -11,9 +11,6 @@ Need to know at a glance if two geometries are the same?
 import math
 from typing import Iterable, Tuple
 
-# https://www.w3resource.com/python/python-bytes.php
-
-
 def int_to_bytes(i: int,
                  width: int,
                  unsigned: bool=False,
@@ -84,73 +81,6 @@ def bytes_to_int(b: bytes):
     # Return the number we have (or its negative twin).
     return i if not neg else i * -1
 
-
-
-def calc_bytes_required(i: int):
-    """
-    Calculate the number of bytes required to hold an integer.
-    :param places:
-    :return:
-    """
-    return int(math.floor((math.log(i)) + 1) / 8)
-
-
-_calc_bytes_for_decimal_places_cache = {}  # This is a cache used by the _calc_bytes_for_decimal_places function.
-
-
-def _calc_bytes_for_decimal_places(places: int):
-    if places in _calc_bytes_for_decimal_places_cache:
-        return _calc_bytes_for_decimal_places_cache[places]
-    else:
-        # Calculate the bytes required for the largest number that can be held in this many decimal places.
-        return calc_bytes_required(int('9' * places))
-
-
-def float_to_bytes(f: float,
-                   width: int,
-                   precision: int = 4,
-                   as_iterable: bool=False) -> bytearray or Iterable[int]:
-    # First, let's figure out how many bytes will be needed to hold the precision portion of the floating point number.
-    precision_width = _calc_bytes_for_decimal_places(precision)
-    # Sanity Check:  The precision width cannot be greater than the total width.
-    if precision_width > width:
-        raise ValueError('The precision would require more than the total number of bytes.')
-    # Get the integer part of the number (the "whole" part, a.k.a. the "characteristic").
-    int_part = int(f)
-    # Now let's get the fractional part (sometimes a.k.a. the "mantissa").
-    frac_part = int(math.modf(f)[0] * math.pow(10, precision))
-    # Convert the whole number to a list of byte-sized ints (bsi).
-    bsis = int_to_bytes(int_part,
-                        # The width we want here is the full width minus the part reserved for precision.
-                        width=(width - precision_width),
-                        as_iterable=True)
-    # Add the fractional byte-sized ints to the list.
-    bsis.extend(int_to_bytes(frac_part, width=precision_width, as_iterable=True))
-    # Depending on the arguments, we can now return either the byte-sized ints as we have them, or we can convert them
-    # to a byte array.
-    return bsis if as_iterable else bytearray(bsis)
-
-
-def _coord_to_bytes(coord: Tuple[float, float] or Tuple[float, float, float],
-                    width: int,
-                    precision: int = 4,
-                    as_iterable: bool = False) -> bytearray or Iterable[int]:
-    # We'll need to know the length of the tuple a couple of times below, so...
-    ord_count = len(coord)
-    # The number of bytes we devote to each floating point number will be the total width of the byte array we'll
-    # return, divided by the number of floats in the tuple.
-    width_per_float = int(width / ord_count)
-    # Sanity Check:
-    if width_per_float < 1:
-        raise ValueError('At least one byte must be available for each ordinal in the coordinate.')
-    # Create an empty list to hold the byte-sized ints we generate.  We'll extend it as we go along.
-    bsis = []
-    for i in range(0, ord_count):
-        bsis.extend(float_to_bytes(coord[i], width=width_per_float, precision=precision, as_iterable=True))
-    # That's that.
-    return bsis if as_iterable else bytearray(bsis)
-
-
 def djiohash_v1(geometry_type_code: int,
                 srid: int,
                 coordinates: Iterable[Tuple[float, float] or Tuple[float, float, float]],
@@ -184,16 +114,17 @@ def djiohash_v1(geometry_type_code: int,
     offset = 0
     for coord in coordinates:
         for ord in coord:
-            # Pull everything from the fractional part of the number into the whole part.
-            ordi = int(ord * math.pow(10, precision))
+            # Pull everything from the fractional part of the floating-point number into the whole part.
+
+            ordi = int(ord * math.pow(10, precision)) # if ord < 0 else ~(int(ord * math.pow(10, precision)))
             # Rotate the integer value by the offset:
             # Shift the number bitwise by the offset.  (Some of the bits will move beyond the high-order part of
             # the mask, as you'll see, we rotate them to the lower bits.)
             ordi_shift = ordi << offset
             # ordi_hi is the part of the number that rotates beyond the high order bits of the mask.
             ordi_hi = ordi >> max_bits - offset
-            # Recombine the shifted part and the
-            ordi_rot = ordi_shift + ordi_hi
+            # Recombine the bits we shifted to the left with those that "rotated around" to end up on the right.
+            ordi_rot = ordi_shift | ordi_hi
             # Apply an XOR
             coords_bits ^= ordi_rot
             # Increment (or reset) the offset.
@@ -201,7 +132,7 @@ def djiohash_v1(geometry_type_code: int,
             # We're keeping track of the total number of coordinates.
             coordinates_count += 1
 
-    #coords_bits = coords_bits & mask
+    coords_bits = ~(coords_bits & mask)
 
     # Now we convert the bits to a series of byte-sized ints.
     coords_bsis = int_to_bytes(coords_bits, width=int(max_bits/8), unsigned=True, as_iterable=True)
