@@ -12,7 +12,7 @@ from . import hashing
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
 from CaseInsensitiveDict import CaseInsensitiveDict
-from enum import Enum
+from enum import Enum, IntFlag
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
@@ -323,14 +323,14 @@ class SpatialReference(object):
             return SpatialReference.from_srid(srid=srid)
 
 
-class GeometryType(Enum):
+class GeometryType(IntFlag):
     """
     These are the supported geometric data types.
     """
     UNKNOWN: int = 0  #: The geometry type is unknown.
     POINT: int = 1  #: a point geometry
     POLYLINE: int = 2  #: a polyline geometry
-    POLYGON: int = 3  #: a polygon geometry
+    POLYGON: int = 4  #: a polygon geometry
 
 
 _shapely_geom_type_map: Dict[str, GeometryType] = {
@@ -366,14 +366,6 @@ class Geometry(object):
 
     # This is the function we use to hash geometries.
     _djiohash: Callable = hashing.djiohash_v1
-
-    # This is a translation table of values to their equivalents for hashing purposes.
-    _djiohash_tx = {
-        GeometryType.UNKNOWN:  0,
-        GeometryType.POINT:    1,
-        GeometryType.POLYLINE: 2,
-        GeometryType.POLYGON:  3
-    }
 
     def __init__(self,
                  shapely_geometry: BaseGeometry,
@@ -506,7 +498,7 @@ class Geometry(object):
         :return: the hash value
         """
         return Geometry._djiohash(
-            geometry_type_code=Geometry._djiohash_tx[self.geometry_type],
+            geometry_type_code=self.geometry_type,
             srid=self.spatial_reference.srid,
             coordinates=self.iter_coords())
 

@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := build
-.PHONY: build publish publish-flightcheck docs venv
+.PHONY: build publish flightcheck docs venv
 
 
-build: coverage publish-flightcheck
+build: coverage flightcheck
 	@echo No python build is defined.
 
 freeze:
@@ -17,7 +17,7 @@ docs: coverage
 	mkdir -p docs/source/_templates
 	cd docs && $(MAKE) html
 
-publish-flightcheck: freeze
+flightcheck:
 	python setup.py sdist
 
 publish:
