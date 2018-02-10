@@ -15,13 +15,17 @@ from osgeo import ogr
 
 class TestPointSuite(unittest.TestCase):
 
-    def test_pointFromWkt_verify(self):
+    def test_init_geometryType_point(self):
+        point: Point = Point.from_coordinates(x=100.1, y=45.2, spatial_reference=4326)
+        self.assertEqual(point.geometry_type, GeometryType.POINT)
+
+    def test_init_fromWkt_correctCoords(self):
         point: Point = Geometry.from_wkt(wkt='POINT(-94.1 46.5)', spatial_reference=4326)
         self.assertEqual(GeometryType.POINT, point.geometry_type)
         self.assertEqual(-94.1, point.x)
         self.assertEqual(46.5, point.y)
 
-    def test_pointFromOgr_verify(self):
+    def test_init_pointFromOgr_correctCoords(self):
         ogr_point = ogr.Geometry(ogr.wkbPoint)
         ogr_point.AddPoint(-94.1, 46.5)
         point: Point = Geometry.from_ogr(ogr_geom=ogr_point, spatial_reference=4326)
@@ -29,7 +33,7 @@ class TestPointSuite(unittest.TestCase):
         self.assertEqual(-94.1, point.x)
         self.assertEqual(46.5, point.y)
 
-    def test_flipCoordinates_verify(self):
+    def test_init_flipCoordinates_coordsFlipped(self):
         p = Point.from_coordinates(x=100.1, y=200.2, spatial_reference=3857)
         self.assertEqual(100.1, p.x)
         self.assertEqual(200.2, p.y)
@@ -75,32 +79,3 @@ class TestPointSuite(unittest.TestCase):
         p_tuple_2 = p.to_point_tuple()
         self.assertTrue(p_tuple_2 == p_tuple)
 
-    def test_pthash(self):  # TODO: Put this test elsewhere!
-        # p0 = Point.from_coordinates(x=0.0001, y=0.0001,
-        #                             spatial_reference=4326)
-        # h0 = p0.djiohash()
-        # print(h0)
-        p1 = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
-                                   spatial_reference=4326)
-        h1 = p1.djiohash()
-        print(h1)
-        p2 = Point.from_coordinates(x=91.5, y=-46.1, z=1.0,
-                                   spatial_reference=4326)
-        h2 = p2.djiohash()
-        print(h2)
-        p3 = Point.from_coordinates(x=91.6, y=-46.1, z=1.0,
-                                    spatial_reference=4326)
-        h3 = p3.djiohash()
-        print(h3)
-        p4 = Point.from_coordinates(x=-46.1, y=91.6, z=1.0,
-                                    spatial_reference=4326)
-        h4 = p4.djiohash()
-        print(h4)
-        p5 = Point.from_coordinates(x=91.5, y=-46.1,
-                                    spatial_reference=4326)
-        h5 = p5.djiohash()
-        print(h5)
-        self.assertEqual(h1, h2)
-        self.assertNotEqual(h1, h3)
-        self.assertNotEqual(h1, h4)
-        self.assertNotEqual(h1, h5)

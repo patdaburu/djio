@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-.. currentmodule:: test_Point
+.. currentmodule:: test_intByteConversion
 .. moduleauthor:: Pat Daburu <pat@daburu.net>
 
 This is a unit test module.

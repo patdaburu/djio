@@ -49,6 +49,17 @@ class TestSpatialReferenceSuite(unittest.TestCase):
         sr2 = SpatialReference(srid=4326)
         self.assertFalse(sr2.is_metric)
 
+    def test_initTwice_firstIsSameAsSecond(self):
+        sr1 = SpatialReference(srid=3857)
+        sr2 = SpatialReference(srid=3857)
+        self.assertTrue(sr1.is_same_as(sr2))
+        sr3 = SpatialReference(srid=4326)
+
+    def test_initTwo_firstIsNotSameAsSecond(self):
+        sr1 = SpatialReference(srid=3857)
+        sr2 = SpatialReference(srid=4326)
+        self.assertFalse(sr1.is_same_as(sr2))
+
     def test_getUtmFromLongitude_continentalUS(self):
         lon_and_utm = {
             -69.609375: 19,
