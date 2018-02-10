@@ -9,6 +9,7 @@ Working with geometries?  Need help?  Here it is!
 """
 
 from . import hashing
+from .errors import DjioException
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
 from CaseInsensitiveDict import CaseInsensitiveDict
@@ -31,70 +32,16 @@ from shapely.wkt import loads as loads_wkt
 from typing import Any, Dict, Callable, Iterable, List, Optional, Set, Tuple, Type
 
 
-# TODO: Create a common abstract exception.
-
-class SpatialReferenceException(Exception):
+class SpatialReferenceException(DjioException):
     """
     Raised when something goes wrong with a spatial reference.
     """
 
-    def __init__(self, message: str, inner: Exception = None):
-        """
 
-        :param message: the exception message
-        :param inner: the exception that caused this exception
-        """
-        super().__init__(message)
-        self._message: str = message
-        self._inner: Exception = inner
-
-    @property
-    def message(self) -> str:
-        """
-        Get the exception message.
-        :return: the exception message
-        """
-        return self._message
-
-    @property
-    def inner(self) -> Exception:
-        """
-        Get the inner exception that caused this exception.
-        :return: the inner exception
-        """
-        return self._inner
-
-
-class GeometryException(Exception):
+class GeometryException(DjioException):
     """
     Raised when something goes wrong with a geometry.
     """
-
-    def __init__(self, message: str, inner: Exception = None):
-        """
-
-        :param message: the exception message
-        :param inner: the exception that caused this exception
-        """
-        super().__init__(message)
-        self._message: str = message
-        self._inner: Exception = inner
-
-    @property
-    def message(self) -> str:
-        """
-        Get the exception message.
-        :return: the exception message
-        """
-        return self._message
-
-    @property
-    def inner(self) -> Exception:
-        """
-        Get the inner exception that caused this exception.
-        :return: the inner exception
-        """
-        return self._inner
 
 
 PointTuple = namedtuple('PointTuple', ['x', 'y', 'z', 'srid'])  #: a lightweight tuple that represents a point
@@ -116,7 +63,9 @@ class SpatialReference(object):
     global system used to locate geographical entities. A spatial reference system defines a specific map projection,
     as well as transformations between different spatial reference systems.
 
-    :seealso: https://en.wikipedia.org/wiki/Spatial_reference_system
+    .. seealso::
+
+        https://en.wikipedia.org/wiki/Spatial_reference_system
     """
     _instances = {}  #: the instances of spatial reference that have been created
     _metric_linear_unit_names: Set[str] = {'meter', 'metre'}  #: metric linear distance unit names
@@ -396,6 +345,7 @@ class Geometry(object):
         except KeyError:
             return GeometryType.UNKNOWN
 
+    @property
     def dimensions(self) -> int:
         """
         How many dimensions does this geometry occupy?  For example: a point is zero-dimensional (0); a line is
@@ -405,8 +355,10 @@ class Geometry(object):
         try:
             return self._caches['dimensions']
         except KeyError:
-            dimensions = _shapely_geom_dimensions_map[self.geometry_type.lower()]
-            self._caches['dimensions'] = dimensions
+            # Retrieve the dimensions from the dictionary of known dimensions for Shapely gometry
+            # types.
+            dimensions = _shapely_geom_dimensions_map[self.shapely_geometry.geom_type.lower()]
+            self._caches['dimensions'] = dimensions  # Cache it for next time.
             return dimensions
 
     @abstractmethod
