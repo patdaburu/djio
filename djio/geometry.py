@@ -350,6 +350,7 @@ class Geometry(object):
         """
         How many dimensions does this geometry occupy?  For example: a point is zero-dimensional (0); a line is
         one-dimensional (1); and a polygon is two-dimensional (2).
+
         :return: the dimensionality of the geometry
         """
         try:
@@ -419,6 +420,7 @@ class Geometry(object):
     def iter_coords(self) -> Iterable[Tuple[float, float] or Tuple[float, float, float]]:
         """
         Retrieve the coordinates that define this geometry as a flattened, ordered iteration.
+
         :return: and ordered iteration of tuples that describe the geometry's coordinates
         """
         raise NotImplementedError('The method has not been implemented.')
@@ -479,11 +481,28 @@ class Geometry(object):
     def project(self,
                 preferred_spatial_reference: SpatialReference or int = None,
                 fallback_spatial_reference: SpatialReference or int or None = 3857) -> 'Geometry':
+        """
+        Project (or re-project) this geometry.
+
+        :param preferred_spatial_reference: the preferred spatial reference
+        :param fallback_spatial_reference: a spatial reference that may be used as a "fallback" if the preferred
+            spatial reference is not provided and a suitable projected spatial reference system isn't available
+        :return: a new, projected, geometry
+
+        .. sealso::
+
+            :py:class:`Projector`
+        """
         return Projector.get_instance().project(geometry=self,
                                                 preferred_spatial_reference=preferred_spatial_reference,
                                                 fallback_spatial_reference=fallback_spatial_reference)
 
     def transform_to_utm(self) -> 'Geometry':
+        """
+        Transform this geometry to an appropriate UTM coordinate system based on its location.
+
+        :return: the new geometry
+        """
         # If this geometry is already in a known UTM projection...
         if self.spatial_reference.is_utm:
             # ...just return it.
@@ -586,6 +605,14 @@ class Geometry(object):
 
     @staticmethod
     def from_ogr(ogr_geom: ogr.Geometry, spatial_reference: SpatialReference or int = None) -> 'Geometry':
+        """
+        Create a djio geometry from an OGR geometry.
+
+        :param ogr_geom: the OGR geometry
+        :param spatial_reference: the spatial reference
+        :return: a djio geometry based on the OGR geometry
+        :raises GeometryException: if the OGR has no spatial reference and no spatial reference is supplied
+        """
         # Grab the spatial reference from the arguments.
         _sr = spatial_reference
         # If the caller didn't provide one...
@@ -594,7 +621,7 @@ class Geometry(object):
             ogr_srs: ogr.osr.SpatialReference = ogr_geom.GetSpatialReference()
             # Now, if the geometry didn't bring it's own spatial reference, we have a problem
             if ogr_srs is None:
-                raise GeometryException('The geometry has no spatial reference, and no SRID was supplied.')
+                raise SpatialReferenceException('The geometry has no spatial reference, and no SRID was supplied.')
             _sr = int(ogr_srs.GetAttrValue('AUTHORITY', 1))
         return Geometry.from_wkb(wkb=ogr_geom.ExportToWkb(), spatial_reference=_sr)
 
