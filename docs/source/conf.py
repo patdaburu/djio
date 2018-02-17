@@ -55,6 +55,26 @@ def skip(app, what, name, obj, skip, options):
 def setup(app):
     app.connect("autodoc-skip-member", skip)
 
+########## TRICK FOUND ON SOME TUTORIAL : ADD IN THE MOCK_MODULES ANY EXTERNAL MODULE YOU'RE USING IN YOUR PACKAGE.
+
+import mock
+
+MOCK_MODULES = [
+    'numpy',
+    'scipy',
+    'sklearn',
+    'matplotlib',
+    'matplotlib.pyplot',
+    'scipy.interpolate',
+    'scipy.special',
+    'math',
+    #'__future__',
+    'toolboxutilities',
+    'GDAL', 'GeoAlchemy2', 'Shapely'
+]
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
+
 
 # -- General configuration ------------------------------------------------
 
