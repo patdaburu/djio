@@ -71,7 +71,7 @@ MOCK_MODULES = [
     'typing',
     #'__future__',
     'toolboxutilities',
-    'GDAL', 'GeoAlchemy2', 'Shapely'
+    'CaseInsensitiveDict', 'GDAL', 'GeoAlchemy2', 'Shapely', 'SQLAlchemy'
 ]
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
@@ -104,7 +104,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'djio'
-copyright = '2017, Pat Daburu'
+copyright = '2018, Pat Daburu'
 author = 'Pat Daburu'
 
 # The version info for the project you're documenting, acts as replacement for
