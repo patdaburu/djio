@@ -489,7 +489,7 @@ class Geometry(object):
             spatial reference is not provided and a suitable projected spatial reference system isn't available
         :return: a new, projected, geometry
 
-        .. sealso::
+        .. seealso::
 
             :py:class:`Projector`
         """
