@@ -12,7 +12,6 @@ djio.geometry
 .. automodule:: djio.geometry
     :members:
     :undoc-members:
-    :inherited-members:
     :show-inheritance:
 
 

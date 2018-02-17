@@ -32,10 +32,10 @@ clean :
 test:
 	py.test --cov . tests/
 
-#venv :
-	# virtualenv --python python3.6 venv
+venv :
+	virtualenv --python python3.6 venv
 
-venv:
+conda:
 	conda env create -f environment.yml
 	# To remove the environment: conda remove --name djio --all
 
