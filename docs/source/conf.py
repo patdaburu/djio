@@ -68,6 +68,7 @@ MOCK_MODULES = [
     'scipy.interpolate',
     'scipy.special',
     'math',
+    'typing',
     #'__future__',
     'toolboxutilities',
     'GDAL', 'GeoAlchemy2', 'Shapely'
