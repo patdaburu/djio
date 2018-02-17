@@ -5,8 +5,8 @@
 .. currentmodule:: __init__.py
 .. moduleauthor:: Pat Daburu <pat@daburu.net>
 
-Djiographic Information Systems
+Working with djiographic information systems?  Djio can help.
 """
 
-__version__ = '0.0.2'  #: the working version
-__release__ = '0.0.2'  #: the release version
+__version__ = '0.0.3'  #: the working version
+__release__ = '0.0.3'  #: the release version

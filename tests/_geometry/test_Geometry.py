@@ -38,6 +38,12 @@ class TestGeometrySuite(unittest.TestCase):
         def get_point_tuples(self):
             return super().get_point_tuples()
 
+        def iter_coords(self):
+            return super().iter_coords()
+
+        def flip_coordinates(self):
+            return super().iter_coords()
+
     def test_init_geometryType_returnsGeometryImpl(self):
         test_geom = TestGeometrySuite.TestGeometry()
         self.assertEqual(test_geom.geometry_type, GeometryType.POINT)
@@ -51,6 +57,16 @@ class TestGeometrySuite(unittest.TestCase):
         test_geom = TestGeometrySuite.TestGeometry()
         with pytest.raises(NotImplementedError):
             test_geom.get_point_tuples()
+
+    def test_init_iterCoords_raisesNotImplementedError(self):
+        test_geom = TestGeometrySuite.TestGeometry()
+        with pytest.raises(NotImplementedError):
+            test_geom.iter_coords()
+
+    def test_init_flipCoords_raisesNotImplementedError(self):
+        test_geom = TestGeometrySuite.TestGeometry()
+        with pytest.raises(NotImplementedError):
+            test_geom.flip_coordinates()
 
 
 

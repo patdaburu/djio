@@ -5,7 +5,7 @@
 .. currentmodule:: djio.errors
 .. moduleauthor:: Pat Daburu <pat@daburu.net>
 
-Did something go wrong?  It did.
+Did something go wrong?  It did?  Use something from this module to deal with it.
 """
 
 from abc import ABCMeta

@@ -6,8 +6,9 @@
 .. moduleauthor:: Pat Daburu <pat@daburu.net>
 """
 
+import pytest
 import unittest
-from djio.geometry import SpatialReference
+from djio.geometry import SpatialReference, SpatialReferenceException
 
 
 class TestSpatialReferenceSuite(unittest.TestCase):
@@ -59,6 +60,10 @@ class TestSpatialReferenceSuite(unittest.TestCase):
         sr1 = SpatialReference(srid=3857)
         sr2 = SpatialReference(srid=4326)
         self.assertFalse(sr1.is_same_as(sr2))
+
+    def test_getUtmForUnsupportedZone_raisesSpatialReferenceException(self):
+        with pytest.raises(SpatialReferenceException):
+            SpatialReference.get_utm_for_zone(45)  # a non-existent UTM zone
 
     def test_getUtmFromLongitude_continentalUS(self):
         lon_and_utm = {
