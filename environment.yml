@@ -1,0 +1,5 @@
+name: djio
+dependencies:
+        - python=3.6
+        - GDAL
+        - numpy
