@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := build
 .PHONY: build publish flightcheck docs venv
+VENV_NAME = djio
 
 
 build: coverage flightcheck
@@ -38,6 +39,15 @@ venv :
 conda:
 	conda env create -f environment.yml
 	# To remove the environment: conda remove --name djio --all
+	
+activate:
+	@echo Make cannot do this for you, but you can do the following:
+	@echo
+	@echo If you are using a local virtual environment:
+	@echo     source venv/bin/activate
+	@echo
+	@echo If your are using a conda virtual environment:
+	@echo     source activate $(VENV_NAME)
 
 install:
 	pip install -r requirements.txt
