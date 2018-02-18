@@ -3,7 +3,7 @@
 VENV_NAME = djio
 
 
-build: coverage flightcheck
+build:
 	@echo No python build is defined.
 
 freeze:
@@ -18,7 +18,7 @@ docs: coverage
 	mkdir -p docs/source/_templates
 	cd docs && $(MAKE) html
 
-flightcheck:
+flightcheck: docs
 	python setup.py sdist
 
 publish:

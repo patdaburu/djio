@@ -77,7 +77,7 @@ MOCK_MODULES = [
     'typing',
     #'__future__',
     'toolboxutilities',
-    'CaseInsensitiveDict', 'GDAL', 'GeoAlchemy2', 'Shapely', 'SQLAlchemy'
+    'CaseInsensitiveDict', 'GDAL', 'GeoAlchemy2', 'Shapely', 'SQLAlchemy', 'measurement', 'measurement.measures'
 ]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 

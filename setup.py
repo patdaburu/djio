@@ -36,8 +36,8 @@ setup(
   version=version,
   install_requires=[
     #'GDAL',
-    'measurement',
-    'Shapely'
+    #'measurement',
+    #'Shapely'
   ],
   python_requires=">=3.6.1",
   license='MIT',
