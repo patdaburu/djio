@@ -35,7 +35,7 @@ setup(
   packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),
   version=version,
   install_requires=[
-    'GDAL',
+    #'GDAL',
     'measurement',
     'Shapely'
   ],

@@ -55,9 +55,15 @@ def skip(app, what, name, obj, skip, options):
 def setup(app):
     app.connect("autodoc-skip-member", skip)
 
-########## TRICK FOUND ON SOME TUTORIAL : ADD IN THE MOCK_MODULES ANY EXTERNAL MODULE YOU'RE USING IN YOUR PACKAGE.
+# http://docs.readthedocs.io/en/latest/faq.html
 
-import mock
+import sys
+from unittest.mock import MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+            return MagicMock()
 
 MOCK_MODULES = [
     'numpy',
@@ -73,8 +79,7 @@ MOCK_MODULES = [
     'toolboxutilities',
     'CaseInsensitiveDict', 'GDAL', 'GeoAlchemy2', 'Shapely', 'SQLAlchemy'
 ]
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
 # -- General configuration ------------------------------------------------
