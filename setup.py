@@ -35,9 +35,13 @@ setup(
   packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),
   version=version,
   install_requires=[
-    #'GDAL',
-    #'measurement',
-    #'Shapely'
+    'CaseInsensitiveDict>=1.0.0,<2',
+    'GDAL>=2.1.0,<3',
+    'GeoAlchemy2>=0.4.0,<1'
+    'SQLAlchemy>=1.1.14,<2'
+    'measurement>=1.8.0,<2',
+    'numpy>=1.13.3,<2',
+    'Shapely>=1.6.1,<2'
   ],
   python_requires=">=3.6.1",
   license='MIT',
