@@ -78,7 +78,7 @@ MOCK_MODULES = [
     #'__future__',
     'toolboxutilities',
     'CaseInsensitiveDict', 'geoalchemy2', 'geoalchemy2.types', 'geoalchemy2.shape',
-    #'shapely', 'shapely.errors', 'shapely.geometry', 'shapely.geometry.base', 'shapely.wkb', 'shapely.wkt',
+    'shapely', 'shapely.errors', 'shapely.geometry', 'shapely.geometry.base', 'shapely.wkb', 'shapely.wkt',
     'measurement', 'measurement.measures', 'osgeo'
 ]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
