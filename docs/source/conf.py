@@ -65,6 +65,9 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return MagicMock()
 
+class BaseGeometry(object):
+    pass
+
 MOCK_MODULES = [
     'numpy',
     'scipy',
@@ -74,10 +77,11 @@ MOCK_MODULES = [
     'scipy.interpolate',
     'scipy.special',
     'math',
-    'typing',
-    #'__future__',
+    #'typing',
+    # #'__future__',
     'toolboxutilities',
-    'CaseInsensitiveDict', 'geoalchemy2', 'geoalchemy2.types', 'geoalchemy2.shape',
+    'CaseInsensitiveDict',
+    'geoalchemy2', 'geoalchemy2.types', 'geoalchemy2.shape',
     'shapely', 'shapely.errors', 'shapely.geometry', 'shapely.geometry.base', 'shapely.wkb', 'shapely.wkt',
     'measurement', 'measurement.measures', 'osgeo'
 ]
