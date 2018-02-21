@@ -55,9 +55,18 @@ def skip(app, what, name, obj, skip, options):
 def setup(app):
     app.connect("autodoc-skip-member", skip)
 
-########## TRICK FOUND ON SOME TUTORIAL : ADD IN THE MOCK_MODULES ANY EXTERNAL MODULE YOU'RE USING IN YOUR PACKAGE.
+# http://docs.readthedocs.io/en/latest/faq.html
 
-import mock
+import sys
+from unittest.mock import MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+            return MagicMock()
+
+class BaseGeometry(object):
+    pass
 
 MOCK_MODULES = [
     'numpy',
@@ -68,13 +77,15 @@ MOCK_MODULES = [
     'scipy.interpolate',
     'scipy.special',
     'math',
-    'typing',
-    #'__future__',
+    #'typing',
+    # #'__future__',
     'toolboxutilities',
-    'GDAL', 'GeoAlchemy2', 'Shapely'
+    'CaseInsensitiveDict',
+    'geoalchemy2', 'geoalchemy2.types', 'geoalchemy2.shape',
+    'shapely', 'shapely.errors', 'shapely.geometry', 'shapely.geometry.base', 'shapely.wkb', 'shapely.wkt',
+    'measurement', 'measurement.measures', 'osgeo'
 ]
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
 # -- General configuration ------------------------------------------------
@@ -104,7 +115,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'djio'
-copyright = '2017, Pat Daburu'
+copyright = '2018, Pat Daburu'
 author = 'Pat Daburu'
 
 # The version info for the project you're documenting, acts as replacement for

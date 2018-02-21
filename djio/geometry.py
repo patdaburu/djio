@@ -12,22 +12,17 @@ from . import hashing
 from .errors import DjioException
 from abc import ABCMeta, abstractmethod, abstractstaticmethod
 from collections import namedtuple
-from CaseInsensitiveDict import CaseInsensitiveDict
 from enum import Enum, IntFlag
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
-from geoalchemy2.shape import from_shape as from_shapely
 import math
 from measurement.measures import Area, Distance
-import numpy as np
 import re
 import shapely.errors
 from shapely.geometry import box, Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
-from shapely.wkb import dumps as dumps_wkb
 from shapely.wkb import loads as loads_wkb
-from shapely.wkt import dumps as dumps_wkt
 from shapely.wkt import loads as loads_wkt
 from typing import Any, Dict, Callable, Iterable, List, Optional, Set, Tuple, Type
 
