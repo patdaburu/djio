@@ -3,8 +3,13 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to djio's documentation!
-================================
+.. image:: _static/images/logo.svg
+   :width: 150px
+   :alt: djio
+   :align: right
+
+djio: Another GIS Toolkit
+=========================
 
 .. toctree::
    :maxdepth: 2
