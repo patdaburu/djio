@@ -90,13 +90,14 @@ def djiohash_v1(geometry_type_code: int,
                 precision: int = 4) -> bytearray:
     """
     This is the first version of the djio hashing algorithm.
+
     :param geometry_type_code: an integer indicating the type of the geometry
     :param srid: the numeric spatial reference ID
     :param coordinates: a flattened, ordered iteration of coordinates in the geometry expressed as tuples
     :param precision: the maximum precision (points behind decimal places) to consider in the supplied coordinates
     :return: a hash value for the geometry
 
-    .. sealso::
+    .. seealso::
 
         :py:class:`djio.geometry.GeometryType`
     """
