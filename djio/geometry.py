@@ -10,21 +10,20 @@ Working with geometries?  Need help?  Here it is!
 
 from . import hashing
 from .errors import DjioException
-from abc import ABCMeta, abstractmethod, abstractstaticmethod
-from collections import namedtuple
+from abc import ABCMeta, abstractmethod
 from enum import Enum, IntFlag
 from osgeo import ogr
 from geoalchemy2.types import WKBElement, WKTElement
 from geoalchemy2.shape import to_shape as to_shapely
 import math
-from measurement.measures import Area, Distance
+from measurement.measures import Area
 import re
 import shapely.errors
 from shapely.geometry import box, Point as ShapelyPoint, LineString, LinearRing, Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.wkb import loads as loads_wkb
 from shapely.wkt import loads as loads_wkt
-from typing import Any, Dict, Callable, Iterable, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, Callable, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 
 class SpatialReferenceException(DjioException):
@@ -39,9 +38,22 @@ class GeometryException(DjioException):
     """
 
 
-PointTuple = namedtuple('PointTuple', ['x', 'y', 'z', 'srid'])  #: a lightweight tuple that represents a point
+class PointTuple(NamedTuple):
+    """
+    This is a lightweight tuple that represents a point.
+    """
+    x: float
+    y: float
+    z: float
+    srid: int
 
-LatLonTuple = namedtuple('LatLonTuple', ['latitude', 'longitude'])  #: a lightweight tuple that represents a location
+
+class LatLonTuple(NamedTuple):
+    """
+    This is a lightweight tuple that represents a specific latitude and longitude
+    """
+    latitude: float
+    longitude: float
 
 
 class LateralSides(Enum):
